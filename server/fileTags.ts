@@ -22,12 +22,16 @@ const TEST_PATH_PATTERNS = [
   /(^|\/)__tests__\//, /(^|\/)tests?\//, /(^|\/)testdata\//, /(^|\/)fixtures?\//, /(^|\/)mocks?\//,
 ];
 
-const IMPORTANT_WORDS = [
-  "payment", "refund", "price", "amount", "total", "tax", "tip", "money", "charge", "invoice", "nmi",
-  "auth", "token", "secret", "password", "credential", "permission", "session",
-  "migration", "transaction", "sql", "delete from", "drop table",
-  "mutex", ".lock(", "unlock(", "go func", "goroutine", "chan ", "atomic.", "sync.",
-  "crypto", "encrypt", "decrypt",
+// - Money and security words count only in the file path.
+const IMPORTANT_PATH_WORDS = [
+  "payment", "refund", "charge", "invoice", "nmi", "tax", "tip", "price",
+  "auth", "token", "secret", "password", "credential", "permission", "migration", "crypto",
+];
+
+// - Risky code counts anywhere in the changed lines.
+const IMPORTANT_CODE_WORDS = [
+  "mutex", ".lock(", ".unlock(", "go func", "atomic.", "sync.waitgroup", "begintx", "createtx", ".commit(", ".rollback(",
+  "delete from", "drop table", "alter table", "password", "secret", "encrypt", "decrypt", "refund(", "charge(",
 ];
 
 function isLockfile(filePath: string): boolean {
@@ -48,14 +52,23 @@ function isPureRename(file: ParsedFile): boolean {
   return file.status === "renamed" && file.hunks.length === 0;
 }
 
-function changedText(file: ParsedFile): string {
+function changedCode(file: ParsedFile): string {
   const changedLines = file.hunks.flatMap((hunk) => hunk.lines.filter((line) => line.kind !== "ctx"));
-  return `${file.path}\n${changedLines.map((line) => line.text).join("\n")}`.toLowerCase();
+  return changedLines.map((line) => line.text).join("\n").toLowerCase();
+}
+
+/** "src/paymentsApi/tip-jar.ts" becomes src, payments, api, tip, jar, ts. */
+function pathWords(filePath: string): string[] {
+  const splitCamelCase = filePath.replace(/([a-z])([A-Z])/g, "$1 $2");
+  return splitCamelCase.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 }
 
 function firstImportantWord(file: ParsedFile): string | undefined {
-  const text = changedText(file);
-  return IMPORTANT_WORDS.find((word) => text.includes(word));
+  const words = pathWords(file.path);
+  const pathWord = IMPORTANT_PATH_WORDS.find((importantWord) => words.some((word) => word.startsWith(importantWord)));
+  if (pathWord) return pathWord;
+  const code = changedCode(file);
+  return IMPORTANT_CODE_WORDS.find((word) => code.includes(word));
 }
 
 function skimReason(file: ParsedFile): string | undefined {

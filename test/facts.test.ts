@@ -80,6 +80,15 @@ describe("tagFile", () => {
     expect(tagFile({ ...baseFile, path: "payments/refund.go" }).tag).toBe("important");
   });
 
+  it("matches path words whole, not inside other words", () => {
+    expect(tagFile({ ...baseFile, path: "src/multipleSyntax.ts" }).tag).toBe("normal");
+    expect(tagFile({ ...baseFile, path: "src/tipJar.ts" }).tag).toBe("important");
+  });
+
+  it("ignores money words that only appear in the code", () => {
+    expect(tagFile({ ...baseFile, path: "src/checkout/page.svelte", hunks: withChange("const total = price * qty") }).tag).toBe("normal");
+  });
+
   it("leaves everything else normal", () => {
     expect(tagFile({ ...baseFile, path: "ui/button.tsx", hunks: withChange("return <div/>") }).tag).toBe("normal");
   });
