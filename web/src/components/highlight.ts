@@ -28,6 +28,12 @@ export function highlightLine(text: string, language: string | undefined): strin
   return hljs.highlight(text, { language, ignoreIllegals: true }).value;
 }
 
+/** Whole-line comments skip code colors and read as comments. */
+export function renderCodeLine(text: string, language: string | undefined, isComment: boolean): string {
+  if (isComment) return `<span class="hljs-comment">${escapeHtml(text)}</span>`;
+  return highlightLine(text, language);
+}
+
 function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

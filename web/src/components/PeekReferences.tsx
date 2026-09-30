@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { api, type PrRoute, type ReferenceSearch, type Snippet, type SymbolUse } from "../api.ts";
-import { highlightLine, languageForFile } from "./highlight.ts";
+import { commentFlags } from "./commentLines.ts";
+import { languageForFile, renderCodeLine } from "./highlight.ts";
 
 type PeekProps = {
   route: PrRoute;
@@ -79,6 +80,7 @@ function Preview({ snippet, targetLine }: { snippet: Snippet | undefined; target
   useEffect(() => centerWithin(pane.current, targetRow.current), [snippet, targetLine]);
   if (!snippet) return <div className="peek-preview muted small" style={{ padding: 10 }}>Loading...</div>;
   const language = languageForFile(snippet.file);
+  const isCommentLine = commentFlags(snippet.lines, snippet.file);
   return (
     <div className="peek-preview" ref={pane}>
       <table>
@@ -88,7 +90,7 @@ function Preview({ snippet, targetLine }: { snippet: Snippet | undefined; target
             return (
               <tr key={lineNumber} ref={lineNumber === targetLine ? targetRow : undefined} className={lineNumber === targetLine ? "peek-target" : ""}>
                 <td className="peek-line-number">{lineNumber}</td>
-                <td className="peek-code" dangerouslySetInnerHTML={{ __html: highlightLine(lineText, language) || " " }} />
+                <td className="peek-code" dangerouslySetInnerHTML={{ __html: renderCodeLine(lineText, language, isCommentLine[lineIndex]) || " " }} />
               </tr>
             );
           })}

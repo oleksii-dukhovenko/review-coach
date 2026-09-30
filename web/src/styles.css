@@ -205,7 +205,7 @@ details > summary { cursor: pointer; }
 .hljs-keyword, .hljs-built_in, .hljs-type { color: #8a3ffc; }
 .hljs-string { color: #1f7a36; }
 .hljs-number, .hljs-literal { color: #b54708; }
-.hljs-comment { color: var(--text-muted); font-style: italic; }
+.hljs-comment, .hljs-comment * { color: var(--text-muted) !important; font-style: italic; }
 .hljs-title, .hljs-title.function_ { color: #2f5bd3; }
 @media (prefers-color-scheme: dark) {
   .hljs-keyword, .hljs-built_in, .hljs-type { color: #c6a4ff; }

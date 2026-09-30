@@ -2,7 +2,8 @@ import { Fragment, type ReactNode } from "react";
 
 import type { DiffFile, DiffHunk, DiffLine } from "../api.ts";
 import { useDiffLayout } from "./diffLayout.ts";
-import { highlightLine, languageForFile } from "./highlight.ts";
+import { commentFlags } from "./commentLines.ts";
+import { languageForFile, renderCodeLine } from "./highlight.ts";
 import { toSplitRows, type SplitRow } from "./splitRows.ts";
 import { wordAtClick } from "./wordAtPoint.ts";
 
@@ -16,7 +17,11 @@ type DiffViewProps = {
   onWordClick: (lineRef: LineRef, word: string) => void;
 };
 
-type LineHandlers = Pick<DiffViewProps, "onLineClick" | "onWordClick"> & { language?: string; filePath: string };
+type LineHandlers = Pick<DiffViewProps, "onLineClick" | "onWordClick"> & {
+  language?: string;
+  filePath: string;
+  commentLines?: Set<DiffLine>;
+};
 
 const MARKER = { add: "+", del: "-", ctx: " " } as const;
 
@@ -48,7 +53,7 @@ function CodeCell({ diffLine, handlers, className = "code" }: { diffLine: DiffLi
   const lineRef = lineRefOf(diffLine);
   return (
     <td className={className} onClick={peekWord} data-file={handlers.filePath} data-line={lineRef.line} data-side={lineRef.side}
-      dangerouslySetInnerHTML={{ __html: highlightLine(diffLine.text, handlers.language) || " " }} />
+      dangerouslySetInnerHTML={{ __html: renderCodeLine(diffLine.text, handlers.language, handlers.commentLines?.has(diffLine) ?? false) || " " }} />
   );
 }
 
@@ -99,6 +104,18 @@ function linesInRow(row: SplitRow): DiffLine[] {
 function annotationsForLines(lines: DiffLine[], annotationsFor: DiffViewProps["annotationsFor"]): ReactNode[] {
   const annotations = lines.map((diffLine) => annotationsFor(lineRefOf(diffLine)));
   return annotations.filter(Boolean).map((annotation, annotationIndex) => <Fragment key={annotationIndex}>{annotation}</Fragment>);
+}
+
+/** Old and new sides are separate runs of code for comment tracking. */
+function commentLinesIn(hunk: DiffHunk, filePath: string): Set<DiffLine> {
+  const flagged = new Set<DiffLine>();
+  const flagRun = (run: DiffLine[]) =>
+    commentFlags(run.map((line) => line.text), filePath).forEach((isComment, lineIndex) => {
+      if (isComment) flagged.add(run[lineIndex]);
+    });
+  flagRun(hunk.lines.filter((line) => line.kind !== "add"));
+  flagRun(hunk.lines.filter((line) => line.kind !== "del"));
+  return flagged;
 }
 
 function UnifiedHunk({ hunk, props, handlers }: { hunk: DiffHunk; props: DiffViewProps; handlers: LineHandlers }) {
@@ -153,7 +170,7 @@ export function DiffView(props: DiffViewProps) {
         {props.file.hunks.map((hunk, hunkIndex) => (
           <Fragment key={hunkIndex}>
             <tr className="hunk"><td colSpan={4}>{hunk.header}</td></tr>
-            <Hunk hunk={hunk} props={props} handlers={handlers} />
+            <Hunk hunk={hunk} props={props} handlers={{ ...handlers, commentLines: commentLinesIn(hunk, props.file.path) }} />
           </Fragment>
         ))}
       </tbody>
