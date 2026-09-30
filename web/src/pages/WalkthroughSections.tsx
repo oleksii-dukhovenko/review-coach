@@ -1,6 +1,5 @@
 import type { DiffFile, RemovedSymbol, Walkthrough } from "../api.ts";
 import { Markdown } from "../components/basics.tsx";
-import { jumpToLine } from "../jump.ts";
 
 
 export function StorySection({ story }: { story: Walkthrough["story"] }) {
@@ -27,7 +26,9 @@ export function StorySection({ story }: { story: Walkthrough["story"] }) {
   );
 }
 
-export function FlowSection({ flow }: { flow: Walkthrough["flow"] }) {
+type OpenLine = (file: string, line: number, side: "LEFT" | "RIGHT") => void;
+
+export function FlowSection({ flow, onOpenLine }: { flow: Walkthrough["flow"]; onOpenLine: OpenLine }) {
   if (flow.length === 0) return null;
   return (
     <section>
@@ -37,7 +38,7 @@ export function FlowSection({ flow }: { flow: Walkthrough["flow"] }) {
         {flow.map((step, stepIndex) => (
           <div key={stepIndex}>
             {stepIndex > 0 ? <div className="flow-arrow">↓</div> : null}
-            <button className="flow-step" style={{ width: "100%" }} onClick={() => jumpToLine(step.file, step.line, "RIGHT")}>
+            <button className="flow-step" style={{ width: "100%" }} onClick={() => onOpenLine(step.file, step.line, "RIGHT")}>
               <strong>{step.label}</strong> <span className="mono muted">{step.file}:{step.line}</span>
               <div className="small">{step.explanation}</div>
             </button>

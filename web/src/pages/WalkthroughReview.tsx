@@ -9,7 +9,7 @@ import { PeekReferences } from "../components/PeekReferences.tsx";
 import { Markdown } from "../components/basics.tsx";
 import { useSavedState, type LineComment, type QuestionAnswer, type ReviewState } from "../savedState.ts";
 import { FinishPanel } from "./FinishPanel.tsx";
-import { jumpToLine, tourStopId } from "../jump.ts";
+import { jumpToFile, jumpToLine, tourStopId } from "../jump.ts";
 import { diffFingerprint, reviewedStatusOf, type ReviewedStatus } from "../reviewedFiles.ts";
 import { GuideSection } from "./GuideSection.tsx";
 import { FlowSection, RemovedCodeSection, skimFiles, StorySection } from "./WalkthroughSections.tsx";
@@ -54,6 +54,8 @@ type Coaching = {
   statusOf: (file: DiffFile) => ReviewedStatus;
   toggleReviewed: (file: DiffFile) => void;
   jumpToReference: (file: string, line: number) => void;
+  isRevealed: (filePath: string) => boolean;
+  setRevealed: (filePath: string, isRevealed: boolean) => void;
 };
 
 function commentsAt(coaching: Coaching, file: string, lineRef: LineRef): LineComment[] {
@@ -134,9 +136,9 @@ function ReviewedToggle({ file, coaching }: { file: DiffFile; coaching: Coaching
 }
 
 function TourStopView({ stop, stopNumber, file, coaching }: { stop: TourStop; stopNumber: number; file: DiffFile | undefined; coaching: Coaching }) {
-  const [isShowingReviewed, setIsShowingReviewed] = useState(false);
   const isReviewed = file !== undefined && coaching.statusOf(file) === "reviewed";
-  const isCollapsed = isReviewed && !isShowingReviewed;
+  const isRevealed = coaching.isRevealed(stop.file);
+  const isCollapsed = isReviewed && !isRevealed;
   return (
     <div className={`tour-stop ${isReviewed ? "is-reviewed" : ""}`} id={tourStopId(stop.file)}>
       <div className="tour-header">
@@ -144,11 +146,12 @@ function TourStopView({ stop, stopNumber, file, coaching }: { stop: TourStop; st
         <span className="mono">{stop.file}</span>
         {file?.tag === "important" ? <span className="chip important" title={file.tagReason}>Important: {file.tagReason}</span> : null}
         {file ? <ReviewedToggle file={file} coaching={coaching} /> : null}
+        {isReviewed && isRevealed ? <button onClick={() => coaching.setRevealed(stop.file, false)}>Hide</button> : null}
       </div>
       {isCollapsed ? (
         <div className="tour-why button-row" style={{ marginTop: 0, borderBottom: "1px solid var(--border)", borderRadius: "0 0 8px 8px" }}>
           <span className="small muted">Reviewed. Hidden to save space.</span>
-          <button onClick={() => setIsShowingReviewed(true)}>Show again</button>
+          <button onClick={() => coaching.setRevealed(stop.file, true)}>Show again</button>
         </div>
       ) : (
         <TourStopBody stop={stop} file={file} coaching={coaching} />
@@ -231,7 +234,40 @@ function githubFileUrl(pr: PrPageData["pr"], file: string, line: number): string
   return `https://github.com/${pr.owner}/${pr.repo}/blob/${pr.headSha}/${file}#L${line}`;
 }
 
-function useCoaching(route: PrRoute, page: PrPageData, state: ReviewState, setState: ReviewStateSetter): Coaching {
+/** Runs after React has drawn the latest state. */
+function afterRender(callback: () => void): void {
+  requestAnimationFrame(() => requestAnimationFrame(callback));
+}
+
+/** Jumps open reviewed files first, since their code is hidden. */
+function useFileNavigation(page: PrPageData, closePeek: () => void) {
+  const [revealedFiles, setRevealedFiles] = useState<Set<string>>(new Set());
+  const setRevealed = (filePath: string, isRevealed: boolean) =>
+    setRevealedFiles((current) => {
+      const next = new Set(current);
+      if (isRevealed) next.add(filePath);
+      else next.delete(filePath);
+      return next;
+    });
+  const openLine = (file: string, line: number, side: "LEFT" | "RIGHT") => {
+    setRevealed(file, true);
+    afterRender(() => {
+      const landed = jumpToLine(file, line, side);
+      if (landed === "missing") window.open(githubFileUrl(page.pr, file, line), "_blank", "noreferrer");
+    });
+  };
+  const openFile = (file: string) => {
+    setRevealed(file, true);
+    afterRender(() => jumpToFile(file));
+  };
+  const jumpToReference = (file: string, line: number) => {
+    closePeek();
+    openLine(file, line, "RIGHT");
+  };
+  return { isRevealed: (filePath: string) => revealedFiles.has(filePath), setRevealed, openLine, openFile, jumpToReference };
+}
+
+function useCoaching(route: PrRoute, page: PrPageData, state: ReviewState, setState: ReviewStateSetter) {
   const [openAsk, setOpenAsk] = useState<OpenAsk | null>(null);
   const [openPeek, setOpenPeek] = useState<OpenPeek | null>(null);
   const [concepts, setConcepts] = useState(page.concepts);
@@ -242,17 +278,11 @@ function useCoaching(route: PrRoute, page: PrPageData, state: ReviewState, setSt
   const conceptsByKey = new Map(concepts.map((concept) => [concept.conceptKey, concept]));
   const saveAnswer = (questionId: string, answer: QuestionAnswer) =>
     setState((current) => ({ ...current, answers: { ...current.answers, [questionId]: answer } }));
+  const navigation = useFileNavigation(page, () => setOpenPeek(null));
   return {
     route, asks: page.asks, conceptsByKey, answers: state.answers, openAsk, setOpenAsk, openPeek, setOpenPeek, saveAnswer, saveConcept,
-    lineComments: state.lineComments, ...lineCommentActions(setState), ...reviewedFileActions(state, setState),
-    jumpToReference: (file: string, line: number) => {
-      setOpenPeek(null);
-      requestAnimationFrame(() => {
-        const landed = jumpToLine(file, line, "RIGHT");
-        if (landed === "missing") window.open(githubFileUrl(page.pr, file, line), "_blank", "noreferrer");
-      });
-    },
-  };
+    lineComments: state.lineComments, ...lineCommentActions(setState), ...reviewedFileActions(state, setState), ...navigation,
+  } satisfies Coaching & typeof navigation;
 }
 
 function LayoutToggle() {
@@ -279,8 +309,8 @@ export function WalkthroughReview({ route, page, onReload }: { route: PrRoute; p
       <p className="small muted">Click any line number to ask about that line or comment on it. Ctrl+click a name to see everywhere it is used.</p>
       <StorySection story={data.walkthrough.story} />
       <GuideSection guideJob={page.guide} files={data.files} statusOf={coaching.statusOf} toggleReviewed={coaching.toggleReviewed}
-        onPrepare={() => void api.prepareGuide(route).then(onReload)} />
-      <FlowSection flow={data.walkthrough.flow} />
+        onOpenFile={coaching.openFile} onPrepare={() => void api.prepareGuide(route).then(onReload)} />
+      <FlowSection flow={data.walkthrough.flow} onOpenLine={coaching.openLine} />
       <RemovedCodeSection removed={data.removed} />
       <h2>Guided tour</h2>
       <LayoutToggle />

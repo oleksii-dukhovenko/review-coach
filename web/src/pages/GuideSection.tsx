@@ -1,6 +1,5 @@
 import type { DiffFile, Guide, JobRecord } from "../api.ts";
 import { Markdown } from "../components/basics.tsx";
-import { jumpToFile } from "../jump.ts";
 import type { ReviewedStatus } from "../reviewedFiles.ts";
 
 type GuideSectionProps = {
@@ -8,6 +7,7 @@ type GuideSectionProps = {
   files: DiffFile[];
   statusOf: (file: DiffFile) => ReviewedStatus;
   toggleReviewed: (file: DiffFile) => void;
+  onOpenFile: (filePath: string) => void;
   onPrepare: () => void;
 };
 
@@ -32,7 +32,7 @@ function GuideFileRow({ entry, file, props }: { entry: Chapter["files"][number];
     <div className={`guide-file ${status === "reviewed" ? "is-reviewed" : ""}`}>
       <input type="checkbox" disabled={!file} checked={status === "reviewed"} onChange={() => file && props.toggleReviewed(file)} title="Mark reviewed" />
       <div>
-        <button onClick={() => jumpToFile(entry.file)}>{entry.file}</button>
+        <button onClick={() => props.onOpenFile(entry.file)}>{entry.file}</button>
         {status === "changed" ? <span className="chip unsure" style={{ marginLeft: 6 }}>Changed since you reviewed</span> : null}
         <div className="small">{entry.whatChanged}</div>
       </div>
