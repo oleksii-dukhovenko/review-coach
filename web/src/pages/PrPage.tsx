@@ -7,9 +7,12 @@ import { WalkthroughReview } from "./WalkthroughReview.tsx";
 
 const POLL_WHILE_BUILDING_MS = 5_000;
 
-function isBuilding(page: PrPageData | null): boolean {
-  const status = page?.job?.status;
+function isInProgress(status: string | undefined): boolean {
   return status === "queued" || status === "building";
+}
+
+function isBuilding(page: PrPageData | null): boolean {
+  return isInProgress(page?.job?.status) || isInProgress(page?.guide?.status);
 }
 
 function BuildStatus({ page, onPrepare }: { page: PrPageData; onPrepare: () => void }) {
@@ -74,7 +77,7 @@ export function PrPage({ route }: { route: PrRoute }) {
     if (!isBuilding(page)) return;
     const timer = setInterval(() => void load(), POLL_WHILE_BUILDING_MS);
     return () => clearInterval(timer);
-  }, [page?.job?.status]);
+  }, [page?.job?.status, page?.guide?.status]);
 
   const prepare = () => void api.prepare(route).then(load);
 
@@ -86,7 +89,7 @@ export function PrPage({ route }: { route: PrRoute }) {
       <ErrorBanner message={error} />
       <BuildStatus page={page} onPrepare={prepare} />
       {page.isOutOfDate ? <OutOfDateBanner onPrepare={prepare} /> : null}
-      {isReady && page.pr.kind === "review" ? <WalkthroughReview route={route} page={page} /> : null}
+      {isReady && page.pr.kind === "review" ? <WalkthroughReview route={route} page={page} onReload={() => void load()} /> : null}
       {isReady && page.pr.kind === "mine" ? <MyPrReview route={route} page={page} /> : null}
     </>
   );

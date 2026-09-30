@@ -268,3 +268,33 @@ details > summary { cursor: pointer; }
   background: repeating-linear-gradient(135deg, var(--surface-muted), var(--surface-muted) 4px, var(--surface) 4px, var(--surface) 8px);
 }
 .diff.split > tbody > tr.split-row > td:nth-child(2) { border-right: 1px solid var(--border); }
+
+/* Jumping and reviewed files */
+@keyframes jump-flash { from { box-shadow: inset 0 0 0 999px var(--question-border); } to { box-shadow: inset 0 0 0 999px transparent; } }
+tr.jump-flash > td { animation: jump-flash 1.6s ease-out; }
+.reviewed-toggle { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; font-size: 13px; cursor: pointer; user-select: none; }
+.reviewed-toggle input { width: 16px; height: 16px; accent-color: var(--good); cursor: pointer; }
+.tour-stop.is-reviewed .tour-header { background: var(--good-soft); }
+.progress { height: 6px; background: var(--surface-muted); border-radius: 999px; overflow: hidden; margin: 6px 0 2px; }
+.progress > div { height: 100%; background: var(--good); transition: width 0.3s; }
+
+/* Guide */
+.guide-chapter { display: grid; grid-template-columns: 34px 1fr; gap: 0 12px; }
+.guide-number {
+  width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 13px;
+}
+.guide-chapter.role-supporting .guide-number { background: var(--surface-muted); color: var(--text-muted); }
+.guide-rail { grid-column: 1; justify-self: center; width: 2px; background: var(--border); }
+.guide-body { padding-bottom: 18px; }
+.guide-files { margin-top: 6px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.guide-file { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; align-items: start; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.guide-file:last-child { border-bottom: none; }
+.guide-file input { margin-top: 3px; accent-color: var(--good); }
+.guide-file button { all: unset; cursor: pointer; font-family: var(--mono); font-size: 13px; color: var(--accent); }
+.guide-file button:hover { text-decoration: underline; }
+.guide-file.is-reviewed { opacity: 0.6; }
+.chip.core { background: var(--accent-soft); color: var(--accent); }
+.chip.follow-on { background: var(--question-soft); color: var(--important); }
+.diff, .peek-preview { tab-size: 4; }
+.diff.split { tab-size: 2; }

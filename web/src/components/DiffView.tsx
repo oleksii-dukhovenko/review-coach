@@ -16,7 +16,7 @@ type DiffViewProps = {
   onWordClick: (lineRef: LineRef, word: string) => void;
 };
 
-type LineHandlers = Pick<DiffViewProps, "onLineClick" | "onWordClick"> & { language?: string };
+type LineHandlers = Pick<DiffViewProps, "onLineClick" | "onWordClick"> & { language?: string; filePath: string };
 
 const MARKER = { add: "+", del: "-", ctx: " " } as const;
 
@@ -45,7 +45,11 @@ function CodeCell({ diffLine, handlers, className = "code" }: { diffLine: DiffLi
     const word = wordAtClick(event, diffLine.text);
     if (word) handlers.onWordClick(lineRefOf(diffLine), word);
   };
-  return <td className={className} onClick={peekWord} dangerouslySetInnerHTML={{ __html: highlightLine(diffLine.text, handlers.language) || " " }} />;
+  const lineRef = lineRefOf(diffLine);
+  return (
+    <td className={className} onClick={peekWord} data-file={handlers.filePath} data-line={lineRef.line} data-side={lineRef.side}
+      dangerouslySetInnerHTML={{ __html: highlightLine(diffLine.text, handlers.language) || " " }} />
+  );
 }
 
 function AnnotationRow({ columns, children }: { columns: number; children: ReactNode }) {
@@ -136,7 +140,9 @@ function ColumnWidths({ isSplit }: { isSplit: boolean }) {
 
 export function DiffView(props: DiffViewProps) {
   const layout = useDiffLayout();
-  const handlers: LineHandlers = { onLineClick: props.onLineClick, onWordClick: props.onWordClick, language: languageForFile(props.file.path) };
+  const handlers: LineHandlers = {
+    onLineClick: props.onLineClick, onWordClick: props.onWordClick, language: languageForFile(props.file.path), filePath: props.file.path,
+  };
   if (props.file.isBinary) return <div className="card muted">Binary file, not shown.</div>;
   const isSplit = layout === "split";
   const Hunk = isSplit ? SplitHunk : UnifiedHunk;

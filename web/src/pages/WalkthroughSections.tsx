@@ -1,13 +1,7 @@
 import type { DiffFile, RemovedSymbol, Walkthrough } from "../api.ts";
 import { Markdown } from "../components/basics.tsx";
+import { jumpToLine } from "../jump.ts";
 
-export function tourStopId(filePath: string): string {
-  return `stop-${filePath.replace(/[^a-zA-Z0-9]/g, "-")}`;
-}
-
-function scrollToFile(filePath: string) {
-  document.getElementById(tourStopId(filePath))?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
 
 export function StorySection({ story }: { story: Walkthrough["story"] }) {
   return (
@@ -43,7 +37,7 @@ export function FlowSection({ flow }: { flow: Walkthrough["flow"] }) {
         {flow.map((step, stepIndex) => (
           <div key={stepIndex}>
             {stepIndex > 0 ? <div className="flow-arrow">↓</div> : null}
-            <button className="flow-step" style={{ width: "100%" }} onClick={() => scrollToFile(step.file)}>
+            <button className="flow-step" style={{ width: "100%" }} onClick={() => jumpToLine(step.file, step.line, "RIGHT")}>
               <strong>{step.label}</strong> <span className="mono muted">{step.file}:{step.line}</span>
               <div className="small">{step.explanation}</div>
             </button>

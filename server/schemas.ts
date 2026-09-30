@@ -64,6 +64,25 @@ export const walkthroughSchema = z.object({
 export type Walkthrough = z.infer<typeof walkthroughSchema>;
 export type Proof = z.infer<typeof proof>;
 
+const guideFile = z.object({
+  file: z.string(),
+  whatChanged: z.string().describe("One plain line: what changed in this file for this chapter"),
+});
+
+const guideChapter = z.object({
+  title: z.string().describe("Short plain title, e.g. Checkout reprices the cart on a 409"),
+  role: z.enum(["core", "follow-on", "supporting"]).describe("core = the heart of the change; follow-on = what it forces elsewhere; supporting = glue, types, tests, config"),
+  summary: z.string().describe("2-4 short sentences: what this chapter changes and why, in the order the code runs"),
+  files: z.array(guideFile),
+});
+
+export const guideSchema = z.object({
+  overview: z.string().describe("One or two sentences: the path through the chapters"),
+  chapters: z.array(guideChapter).describe("Core first, then follow-on, then supporting. Every changed file appears in exactly one chapter."),
+});
+
+export type Guide = z.infer<typeof guideSchema>;
+
 const threadVerdict = z.object({
   threadId: z.string(),
   meaning: z.string().describe("What the reviewer is saying, in plain words"),
@@ -87,3 +106,4 @@ function toClaudeJsonSchema(schema: z.ZodType): object {
 
 export const walkthroughJsonSchema = toClaudeJsonSchema(walkthroughSchema);
 export const triageJsonSchema = toClaudeJsonSchema(triageSchema);
+export const guideJsonSchema = toClaudeJsonSchema(guideSchema);

@@ -9,6 +9,7 @@ type PeekProps = {
   fromFile: string;
   fromLine: number;
   onClose: () => void;
+  onJump: (reference: SymbolUse) => void;
 };
 
 type FileGroup = { file: string; references: SymbolUse[] };
@@ -97,8 +98,8 @@ function Preview({ snippet, targetLine }: { snippet: Snippet | undefined; target
   );
 }
 
-function ReferenceList({ groups, word, selected, onSelect }: {
-  groups: FileGroup[]; word: string; selected: SymbolUse | undefined; onSelect: (reference: SymbolUse) => void;
+function ReferenceList({ groups, word, selected, onSelect, onJump }: {
+  groups: FileGroup[]; word: string; selected: SymbolUse | undefined; onSelect: (reference: SymbolUse) => void; onJump: (reference: SymbolUse) => void;
 }) {
   const pane = useRef<HTMLDivElement>(null);
   const selectedRow = useRef<HTMLDivElement>(null);
@@ -117,8 +118,9 @@ function ReferenceList({ groups, word, selected, onSelect }: {
             {group.references.map((reference) => {
               const isSelected = reference === selected;
               return (
-                <div key={reference.line} ref={isSelected ? selectedRow : undefined}
-                  className={`peek-item ${isSelected ? "selected" : ""}`} onClick={() => onSelect(reference)}>
+                <div key={reference.line} ref={isSelected ? selectedRow : undefined} title="Click again to jump there"
+                  className={`peek-item ${isSelected ? "selected" : ""}`}
+                  onClick={() => (isSelected ? onJump(reference) : onSelect(reference))} onDoubleClick={() => onJump(reference)}>
                   <span className="peek-item-line">{reference.line}</span>
                   <span className="peek-item-text"><MarkedText text={reference.text} word={word} /></span>
                 </div>
@@ -138,7 +140,7 @@ function headerText(search: ReferenceSearch): string {
 }
 
 /** VS Code-style peek: preview on the left, matches on the right. */
-export function PeekReferences({ route, word, fromFile, fromLine, onClose }: PeekProps) {
+export function PeekReferences({ route, word, fromFile, fromLine, onClose, onJump }: PeekProps) {
   const [search, setSearch] = useState<ReferenceSearch>();
   const [error, setError] = useState<string>();
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -164,7 +166,10 @@ export function PeekReferences({ route, word, fromFile, fromLine, onClose }: Pee
     setSelectedIndex((current) => Math.min(Math.max(current + step, 0), orderedReferences.length - 1));
 
   const handleKey = (event: KeyboardEvent) => {
-    const actions: Record<string, () => void> = { ArrowDown: () => moveSelection(1), ArrowUp: () => moveSelection(-1), Escape: onClose };
+    const jumpToSelected = () => selected && onJump(selected);
+    const actions: Record<string, () => void> = {
+      ArrowDown: () => moveSelection(1), ArrowUp: () => moveSelection(-1), Enter: jumpToSelected, Escape: onClose,
+    };
     const action = actions[event.key];
     if (!action) return;
     event.preventDefault();
@@ -179,7 +184,7 @@ export function PeekReferences({ route, word, fromFile, fromLine, onClose }: Pee
           <span className="muted"> {search ? headerText(search) : "searching..."}</span>
           {search?.onlySameFolder ? <span className="muted"> (this folder only: private Go name)</span> : null}
         </span>
-        <span className="muted small">↑↓ to move, Esc to close <button className="peek-close" onClick={onClose} aria-label="Close">×</button></span>
+        <span className="muted small">↑↓ to move, Enter or click again to jump, Esc to close <button className="peek-close" onClick={onClose} aria-label="Close">×</button></span>
       </div>
       {error ? <div className="banner error" style={{ margin: 8 }}>{error}</div> : null}
       {search && search.total === 0 ? <div className="muted small" style={{ padding: 10 }}>No matches in this PR's code.</div> : null}
@@ -187,7 +192,7 @@ export function PeekReferences({ route, word, fromFile, fromLine, onClose }: Pee
         <div className="peek-body">
           <Preview snippet={snippet} targetLine={selected?.line ?? 0} />
           <ReferenceList groups={groups} word={word} selected={selected}
-            onSelect={(reference) => setSelectedIndex(orderedReferences.indexOf(reference))} />
+            onSelect={(reference) => setSelectedIndex(orderedReferences.indexOf(reference))} onJump={onJump} />
         </div>
       ) : null}
     </div>

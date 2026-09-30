@@ -11,6 +11,8 @@ export type LineComment = { id: string; file: string; line: number; side: "LEFT"
 export type ReviewState = {
   answers: Record<string, QuestionAnswer>;
   lineComments: LineComment[];
+  // - File path to the diff fingerprint you reviewed.
+  reviewedFiles: Record<string, string>;
   summary: string;
   verdict: ReviewEvent | null;
   postedUrl: string | null;

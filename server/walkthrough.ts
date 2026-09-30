@@ -6,10 +6,13 @@ import { config } from "./config.ts";
 import { readPrDiff } from "./diff.ts";
 import { tagFiles } from "./fileTags.ts";
 import { checkProof, lineCounterFor } from "./proofCheck.ts";
-import { triagePrompt, walkthroughPrompt } from "./prompts.ts";
+import { guidePrompt, triagePrompt, walkthroughPrompt } from "./prompts.ts";
 import { traceRemovedCode } from "./removedCode.ts";
 import { collectRuleFiles } from "./rules.ts";
-import { triageJsonSchema, triageSchema, walkthroughJsonSchema, walkthroughSchema, type Triage, type Walkthrough } from "./schemas.ts";
+import {
+  guideJsonSchema, guideSchema, triageJsonSchema, triageSchema, walkthroughJsonSchema, walkthroughSchema,
+  type Guide, type Triage, type Walkthrough,
+} from "./schemas.ts";
 import type { DiffFile, PullRequest, RemovedSymbol } from "./types.ts";
 
 export type WalkthroughData = { walkthrough: Walkthrough; files: DiffFile[]; removed: RemovedSymbol[] };
@@ -87,6 +90,24 @@ export async function buildTriage(pr: PullRequest): Promise<BuiltJob<TriageData>
   });
   const triage = await checkTriageProofs(built.data, lineCounterFor(checkout.worktree, checkout.mergeBase));
   return { data: { triage, files }, sessionId: built.sessionId };
+}
+
+/** Chapters for the Guide, written from an existing walkthrough. */
+export async function buildGuide(pr: PullRequest, walkthroughData: WalkthroughData): Promise<BuiltJob<Guide>> {
+  const checkout = await ensureCheckout(pr);
+  const { walkthrough, files } = walkthroughData;
+  return askClaudeWithRetry({
+    cwd: checkout.worktree,
+    prompt: guidePrompt({
+      pr,
+      files,
+      storySummary: `${walkthrough.story.whatItDoes}\n${walkthrough.story.whyNeeded}`,
+      tourNotes: walkthrough.tour.map((stop) => ({ file: stop.file, whyItMatters: stop.whyItMatters })),
+    }),
+    jsonSchema: guideJsonSchema,
+    parse: (raw) => guideSchema.parse(raw),
+    addDirs: [],
+  });
 }
 
 /** Changes whenever a thread opens or gets a new comment. */

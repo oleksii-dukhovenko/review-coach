@@ -1,5 +1,5 @@
 import { removeCheckout } from "./checkout.ts";
-import { deletePrEverywhere, getJob, hidePrFromInbox, listInboxPrs, saveSetting, savePr } from "./db.ts";
+import { deletePrEverywhere, getJob, hidePrFromInbox, listInboxPrs, saveSetting, savePr, type JobKind } from "./db.ts";
 import { fetchPrState, fetchPullRequest, searchMyOpenPrs, searchReviewRequests } from "./github.ts";
 import { enqueue } from "./queue.ts";
 import type { PrKind, PullRequest } from "./types.ts";
@@ -14,9 +14,13 @@ function hasThreadsWaitingOnMe(pr: PullRequest): boolean {
   return pr.openThreads.length > 0;
 }
 
-function hasNeverBeenBuilt(pr: PullRequest, kind: "walkthrough" | "triage"): boolean {
+function hasNeverBeenBuilt(pr: PullRequest, kind: JobKind): boolean {
   const status = getJob(pr.key, kind)?.status ?? "none";
   return status === "none";
+}
+
+function isWalkthroughReady(pr: PullRequest): boolean {
+  return getJob(pr.key, "walkthrough")?.status === "ready";
 }
 
 /** Prepares ahead only what you will almost always open. */
@@ -24,6 +28,8 @@ function queueFirstBuilds(prs: PullRequest[]): void {
   for (const pr of prs) {
     const kind = pr.kind === "review" ? "walkthrough" : "triage";
     if (hasNeverBeenBuilt(pr, kind)) enqueue({ prKey: pr.key, kind });
+    const needsGuide = isWalkthroughReady(pr) && hasNeverBeenBuilt(pr, "guide");
+    if (needsGuide) enqueue({ prKey: pr.key, kind: "guide" });
   }
 }
 

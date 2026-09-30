@@ -62,6 +62,27 @@ export function walkthroughPrompt(input: WalkthroughInput): string {
   ].join("\n\n");
 }
 
+type GuideInput = { pr: PullRequest; files: DiffFile[]; storySummary: string; tourNotes: { file: string; whyItMatters: string }[] };
+
+export function guidePrompt(input: GuideInput): string {
+  const tourNotes = input.tourNotes.map((stop) => `- ${stop.file}: ${stop.whyItMatters}`).join("\n");
+  return [
+    COACH_ROLE,
+    `## The PR\n${input.pr.owner}/${input.pr.repo}#${input.pr.number} by ${input.pr.author}.`,
+    untrustedBlock("pr_title", input.pr.title),
+    `## What it does (already written)\n${input.storySummary}`,
+    `## Files and tags\n${describeFileTags(input.files)}`,
+    `## Notes already written per file\n${tourNotes}`,
+    `## What to produce
+A guide that splits this PR into chapters, like a table of contents for reviewing it.
+- Order chapters the way the work was reasoned through: the core change first, then what it forces elsewhere, then supporting glue.
+- Each chapter: a plain title, its role, a 2-4 sentence summary, and its files with one line each on what changed.
+- Every changed file appears in exactly one chapter. Put skim files in a supporting chapter.
+- Plain words. Short sentences. No jargon without a one-line gloss.`,
+    untrustedBlock("pr_diff", patchForReview(input.files)),
+  ].join("\n\n");
+}
+
 function describeThread(thread: ReviewThread): string {
   const location = `${thread.path}:${thread.line ?? "outdated"} (${thread.side})`;
   const comments = thread.comments.map((comment) => `  [${comment.author}]: ${comment.body}`).join("\n");

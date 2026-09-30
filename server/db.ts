@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { config } from "./config.ts";
 import type { JobStatus, PullRequest } from "./types.ts";
 
-export type JobKind = "walkthrough" | "triage";
+export type JobKind = "walkthrough" | "triage" | "guide";
 
 export type JobRecord = {
   prKey: string;
@@ -153,7 +153,8 @@ export function saveFinishedJob(job: FinishedJob): void {
          data = excluded.data, error = NULL, session_id = excluded.session_id, built_at = excluded.built_at`,
     )
     .run(job.prKey, job.kind, job.builtFor, JSON.stringify(job.data), job.sessionId, new Date().toISOString());
-  database.prepare("DELETE FROM ask_sessions WHERE pr_key = ?").run(job.prKey);
+  const replacesAskContext = job.kind !== "guide";
+  if (replacesAskContext) database.prepare("DELETE FROM ask_sessions WHERE pr_key = ?").run(job.prKey);
 }
 
 export function getReviewState(prKey: string): unknown {

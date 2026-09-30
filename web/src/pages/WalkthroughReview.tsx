@@ -9,7 +9,10 @@ import { PeekReferences } from "../components/PeekReferences.tsx";
 import { Markdown } from "../components/basics.tsx";
 import { useSavedState, type LineComment, type QuestionAnswer, type ReviewState } from "../savedState.ts";
 import { FinishPanel } from "./FinishPanel.tsx";
-import { FlowSection, RemovedCodeSection, skimFiles, StorySection, tourStopId } from "./WalkthroughSections.tsx";
+import { jumpToLine, tourStopId } from "../jump.ts";
+import { diffFingerprint, reviewedStatusOf, type ReviewedStatus } from "../reviewedFiles.ts";
+import { GuideSection } from "./GuideSection.tsx";
+import { FlowSection, RemovedCodeSection, skimFiles, StorySection } from "./WalkthroughSections.tsx";
 
 type TourStop = WalkthroughData["walkthrough"]["tour"][number];
 
@@ -17,7 +20,7 @@ type OpenAsk = { file: string } & LineRef;
 
 type OpenPeek = { file: string; word: string } & LineRef;
 
-const DEFAULT_REVIEW_STATE: ReviewState = { answers: {}, lineComments: [], summary: "", verdict: null, postedUrl: null };
+const DEFAULT_REVIEW_STATE: ReviewState = { answers: {}, lineComments: [], reviewedFiles: {}, summary: "", verdict: null, postedUrl: null };
 
 function isAtLine(item: { line: number; side: string }, lineRef: LineRef): boolean {
   return item.line === lineRef.line && item.side === lineRef.side;
@@ -48,6 +51,9 @@ type Coaching = {
   addLineComment: (file: string, lineRef: LineRef, body: string) => void;
   updateLineComment: (commentId: string, body: string) => void;
   removeLineComment: (commentId: string) => void;
+  statusOf: (file: DiffFile) => ReviewedStatus;
+  toggleReviewed: (file: DiffFile) => void;
+  jumpToReference: (file: string, line: number) => void;
 };
 
 function commentsAt(coaching: Coaching, file: string, lineRef: LineRef): LineComment[] {
@@ -65,7 +71,7 @@ function LineAnnotations({ file, notes, questions, lineRef, coaching }: {
     <>
       {peek ? (
         <PeekReferences key={peek.word} route={coaching.route} word={peek.word} fromFile={file} fromLine={lineRef.line}
-          onClose={() => coaching.setOpenPeek(null)} />
+          onClose={() => coaching.setOpenPeek(null)} onJump={(reference) => coaching.jumpToReference(reference.file, reference.line)} />
       ) : null}
       {notes.map((note, noteIndex) => (
         <TeachingNote key={noteIndex} note={note} concept={coaching.conceptsByKey.get(note.conceptKey)} onSave={(status) => coaching.saveConcept(note, status)} />
@@ -116,14 +122,44 @@ function OutsideDiffItems({ stop, file, coaching }: { stop: TourStop; file: Diff
   );
 }
 
-function TourStopView({ stop, stopNumber, file, coaching }: { stop: TourStop; stopNumber: number; file: DiffFile | undefined; coaching: Coaching }) {
+function ReviewedToggle({ file, coaching }: { file: DiffFile; coaching: Coaching }) {
+  const status = coaching.statusOf(file);
   return (
-    <div className="tour-stop" id={tourStopId(stop.file)}>
+    <label className="reviewed-toggle" onClick={(event) => event.stopPropagation()}>
+      {status === "changed" ? <span className="chip unsure">Changed since you reviewed</span> : null}
+      <input type="checkbox" checked={status === "reviewed"} onChange={() => coaching.toggleReviewed(file)} />
+      Reviewed
+    </label>
+  );
+}
+
+function TourStopView({ stop, stopNumber, file, coaching }: { stop: TourStop; stopNumber: number; file: DiffFile | undefined; coaching: Coaching }) {
+  const [isShowingReviewed, setIsShowingReviewed] = useState(false);
+  const isReviewed = file !== undefined && coaching.statusOf(file) === "reviewed";
+  const isCollapsed = isReviewed && !isShowingReviewed;
+  return (
+    <div className={`tour-stop ${isReviewed ? "is-reviewed" : ""}`} id={tourStopId(stop.file)}>
       <div className="tour-header">
         <strong>Stop {stopNumber}</strong>
         <span className="mono">{stop.file}</span>
         {file?.tag === "important" ? <span className="chip important" title={file.tagReason}>Important: {file.tagReason}</span> : null}
+        {file ? <ReviewedToggle file={file} coaching={coaching} /> : null}
       </div>
+      {isCollapsed ? (
+        <div className="tour-why button-row" style={{ marginTop: 0, borderBottom: "1px solid var(--border)", borderRadius: "0 0 8px 8px" }}>
+          <span className="small muted">Reviewed. Hidden to save space.</span>
+          <button onClick={() => setIsShowingReviewed(true)}>Show again</button>
+        </div>
+      ) : (
+        <TourStopBody stop={stop} file={file} coaching={coaching} />
+      )}
+    </div>
+  );
+}
+
+function TourStopBody({ stop, file, coaching }: { stop: TourStop; file: DiffFile | undefined; coaching: Coaching }) {
+  return (
+    <>
       <div className="tour-why"><Markdown text={stop.whyItMatters} /></div>
       <OutsideDiffItems stop={stop} file={file} coaching={coaching} />
       {file ? (
@@ -133,7 +169,7 @@ function TourStopView({ stop, stopNumber, file, coaching }: { stop: TourStop; st
       ) : (
         <div className="card muted small">This file is not in the diff.</div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -145,8 +181,11 @@ function SkimSection({ files, coaching }: { files: DiffFile[]; coaching: Coachin
       <h2>Skim <span className="muted">({files.length})</span></h2>
       <p className="small muted">Tests, generated code, lockfiles, and renames. Open one only if you want to.</p>
       {files.map((file) => (
-        <details key={file.path} className="card">
-          <summary><span className="mono">{file.path}</span> <span className="chip">{file.tagReason}</span></summary>
+        <details key={file.path} className="card" id={tourStopId(file.path)}>
+          <summary style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span className="mono">{file.path}</span> <span className="chip">{file.tagReason}</span>
+            <ReviewedToggle file={file} coaching={coaching} />
+          </summary>
           <DiffView file={file} annotationsFor={(lineRef) => annotationsAt(emptyStop(file), coaching, lineRef)}
             onLineClick={(lineRef) => coaching.setOpenAsk({ file: file.path, ...lineRef })}
             onWordClick={(lineRef, word) => coaching.setOpenPeek({ file: file.path, word, ...lineRef })} />
@@ -177,6 +216,21 @@ function lineCommentActions(setState: ReviewStateSetter) {
   };
 }
 
+function reviewedFileActions(state: ReviewState, setState: ReviewStateSetter) {
+  const statusOf = (file: DiffFile) => reviewedStatusOf(file, state.reviewedFiles);
+  const toggleReviewed = (file: DiffFile) =>
+    setState((current) => {
+      const { [file.path]: _previous, ...others } = current.reviewedFiles;
+      const isNowReviewed = reviewedStatusOf(file, current.reviewedFiles) !== "reviewed";
+      return { ...current, reviewedFiles: isNowReviewed ? { ...others, [file.path]: diffFingerprint(file) } : others };
+    });
+  return { statusOf, toggleReviewed };
+}
+
+function githubFileUrl(pr: PrPageData["pr"], file: string, line: number): string {
+  return `https://github.com/${pr.owner}/${pr.repo}/blob/${pr.headSha}/${file}#L${line}`;
+}
+
 function useCoaching(route: PrRoute, page: PrPageData, state: ReviewState, setState: ReviewStateSetter): Coaching {
   const [openAsk, setOpenAsk] = useState<OpenAsk | null>(null);
   const [openPeek, setOpenPeek] = useState<OpenPeek | null>(null);
@@ -190,7 +244,14 @@ function useCoaching(route: PrRoute, page: PrPageData, state: ReviewState, setSt
     setState((current) => ({ ...current, answers: { ...current.answers, [questionId]: answer } }));
   return {
     route, asks: page.asks, conceptsByKey, answers: state.answers, openAsk, setOpenAsk, openPeek, setOpenPeek, saveAnswer, saveConcept,
-    lineComments: state.lineComments, ...lineCommentActions(setState),
+    lineComments: state.lineComments, ...lineCommentActions(setState), ...reviewedFileActions(state, setState),
+    jumpToReference: (file: string, line: number) => {
+      setOpenPeek(null);
+      requestAnimationFrame(() => {
+        const landed = jumpToLine(file, line, "RIGHT");
+        if (landed === "missing") window.open(githubFileUrl(page.pr, file, line), "_blank", "noreferrer");
+      });
+    },
   };
 }
 
@@ -205,7 +266,7 @@ function LayoutToggle() {
   );
 }
 
-export function WalkthroughReview({ route, page }: { route: PrRoute; page: PrPageData }) {
+export function WalkthroughReview({ route, page, onReload }: { route: PrRoute; page: PrPageData; onReload: () => void }) {
   const data = page.job!.data as WalkthroughData;
   const [state, setState] = useSavedState<ReviewState>(route, page.reviewState, DEFAULT_REVIEW_STATE);
   const coaching = useCoaching(route, page, state, setState);
@@ -217,6 +278,8 @@ export function WalkthroughReview({ route, page }: { route: PrRoute; page: PrPag
     <>
       <p className="small muted">Click any line number to ask about that line or comment on it. Ctrl+click a name to see everywhere it is used.</p>
       <StorySection story={data.walkthrough.story} />
+      <GuideSection guideJob={page.guide} files={data.files} statusOf={coaching.statusOf} toggleReviewed={coaching.toggleReviewed}
+        onPrepare={() => void api.prepareGuide(route).then(onReload)} />
       <FlowSection flow={data.walkthrough.flow} />
       <RemovedCodeSection removed={data.removed} />
       <h2>Guided tour</h2>

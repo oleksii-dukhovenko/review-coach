@@ -78,7 +78,7 @@ export function buildRoutes(): Hono {
     const pr = requirePr(context);
     const job = getJob(pr.key, jobKindFor(pr));
     return context.json({
-      pr, job: job ?? null, isOutOfDate: isOutOfDate(pr, job),
+      pr, job: job ?? null, guide: getJob(pr.key, "guide") ?? null, isOutOfDate: isOutOfDate(pr, job),
       reviewState: getReviewState(pr.key), asks: listAsks(pr.key), concepts: listConcepts(),
     });
   });
@@ -86,6 +86,11 @@ export function buildRoutes(): Hono {
   api.post(`${prPath}/prepare`, (context) => {
     const pr = requirePr(context);
     enqueue({ prKey: pr.key, kind: jobKindFor(pr) });
+    return context.json({ ok: true });
+  });
+
+  api.post(`${prPath}/prepare-guide`, (context) => {
+    enqueue({ prKey: requirePr(context).key, kind: "guide" });
     return context.json({ ok: true });
   });
 

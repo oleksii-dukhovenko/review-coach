@@ -4,7 +4,7 @@ import type { ReviewCommentInput, ReviewEvent } from "../../server/github.ts";
 import type { JobStatus, PrKind, PullRequest } from "../../server/types.ts";
 
 export type { Concept, AskRecord, JobRecord, ReviewCommentInput, ReviewEvent, PullRequest };
-export type { Walkthrough, Triage } from "../../server/schemas.ts";
+export type { Walkthrough, Triage, Guide } from "../../server/schemas.ts";
 export type { WalkthroughData, TriageData } from "../../server/walkthrough.ts";
 export type { DiffFile, DiffHunk, DiffLine, RemovedSymbol, SymbolUse } from "../../server/types.ts";
 export type { ReferenceSearch, Snippet } from "../../server/references.ts";
@@ -39,6 +39,7 @@ export type Inbox = {
 export type PrPageData = {
   pr: PullRequest;
   job: JobRecord | null;
+  guide: JobRecord | null;
   isOutOfDate: boolean;
   reviewState: Record<string, unknown>;
   asks: AskRecord[];
@@ -68,6 +69,7 @@ export const api = {
   resumeQueue: () => requestJson("POST", "/api/queue/resume"),
   prPage: (route: PrRoute) => requestJson<PrPageData>("GET", prUrl(route)),
   prepare: (route: PrRoute) => requestJson("POST", `${prUrl(route)}/prepare`),
+  prepareGuide: (route: PrRoute) => requestJson("POST", `${prUrl(route)}/prepare-guide`),
   saveState: (route: PrRoute, state: unknown) => requestJson("PUT", `${prUrl(route)}/state`, state),
   submitReview: (route: PrRoute, review: { event: ReviewEvent; body: string; comments: ReviewCommentInput[] }) =>
     requestJson<{ url: string }>("POST", `${prUrl(route)}/review`, review),
