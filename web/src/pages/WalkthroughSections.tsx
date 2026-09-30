@@ -54,10 +54,20 @@ export function FlowSection({ flow }: { flow: Walkthrough["flow"] }) {
   );
 }
 
+function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+/** Walkthroughs built before counts existed only have the lists. */
+function withCounts(symbol: RemovedSymbol): RemovedSymbol {
+  return { ...symbol, usedBeforeCount: symbol.usedBeforeCount ?? symbol.usedBefore.length, usedAfterCount: symbol.usedAfterCount ?? symbol.usedAfter.length };
+}
+
 function usageSummary(symbol: RemovedSymbol): string {
-  if (symbol.usedBefore.length === 0) return "Nothing else mentioned it before this PR.";
-  const stillMentioned = symbol.usedAfter.length > 0 ? ` ${symbol.usedAfter.length} mentions remain after it.` : " No mentions remain after it.";
-  return `Mentioned in ${symbol.usedBefore.length} place${symbol.usedBefore.length === 1 ? "" : "s"} before this PR.${stillMentioned}`;
+  if (symbol.usedBeforeCount === 0) return "Nothing else mentioned it before this PR.";
+  const before = `Mentioned in ${plural(symbol.usedBeforeCount, "place")} before this PR.`;
+  const after = symbol.usedAfterCount > 0 ? `${plural(symbol.usedAfterCount, "mention")} remain after it.` : "No mentions remain after it.";
+  return `${before} ${after}`;
 }
 
 function RemovedSymbolCard({ symbol }: { symbol: RemovedSymbol }) {
@@ -65,7 +75,7 @@ function RemovedSymbolCard({ symbol }: { symbol: RemovedSymbol }) {
     <div className="card">
       <strong className="mono">{symbol.name}</strong> <span className="small muted">from {symbol.file}</span>
       <div>{usageSummary(symbol)}</div>
-      {symbol.usedAfter.length > 0 ? <div className="chip failed">Still mentioned after removal: check these</div> : null}
+      {symbol.usedAfterCount > 0 ? <div className="chip failed">Still mentioned after removal: check these</div> : null}
       <details>
         <summary className="small">Where it was mentioned, and recent history</summary>
         <div className="small mono">
@@ -88,7 +98,7 @@ export function RemovedCodeSection({ removed }: { removed: RemovedSymbol[] }) {
     <section>
       <h2>What got removed</h2>
       <p className="small muted">Checked with git, not AI. "Before" means the base branch where this PR starts.</p>
-      {removed.map((symbol) => <RemovedSymbolCard key={`${symbol.file}:${symbol.name}`} symbol={symbol} />)}
+      {removed.map((symbol) => <RemovedSymbolCard key={`${symbol.file}:${symbol.name}`} symbol={withCounts(symbol)} />)}
     </section>
   );
 }

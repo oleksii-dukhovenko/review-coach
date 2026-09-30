@@ -123,7 +123,13 @@ describe("traceRemovedCode", () => {
     const [traced] = await traceRemovedCode(repoDir, files, baseSha, headSha);
     expect(traced.usedBefore).toEqual([{ file: "main.go", line: 3, text: "var value = oldHelper()" }]);
     expect(traced.usedAfter).toEqual([]);
+    expect(traced.usedBeforeCount).toBe(1);
     expect(traced.recentCommits[0].subject).toBe("Add oldHelper");
+  });
+
+  it("ignores a function that became a constant", () => {
+    const becameConstant = SAMPLE_PATCH.replace("+func checkOrder(order Order) error {", "+const validateOrder = 1");
+    expect(findRemovedDeclarations(tagFiles(parseUnifiedDiff(becameConstant)))).toEqual([]);
   });
 
   it("ignores functions that were only renamed in place", () => {

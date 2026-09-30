@@ -42,11 +42,22 @@ function declarationsOnLines(file: DiffFile, kind: "add" | "del"): Declaration[]
   return names.map((name) => ({ name, file: file.oldPath || file.path }));
 }
 
+function addedLineTexts(files: DiffFile[]): string[] {
+  return files.flatMap((file) => file.hunks.flatMap((hunk) => hunk.lines.filter((line) => line.kind === "add").map((line) => line.text)));
+}
+
+/** A function turned into a constant or variable is not removed. */
+function isRedeclaredAsValue(name: string, addedLines: string[]): boolean {
+  const valueDeclaration = new RegExp(`\\b(?:const|var|let|type)\\s+${name}\\b|^\\s*${name}\\s*(?::=|=(?!=))`);
+  return addedLines.some((lineText) => valueDeclaration.test(lineText));
+}
+
 /** Declarations deleted and not re-declared anywhere in the PR. */
 export function findRemovedDeclarations(files: DiffFile[]): Declaration[] {
   const addedNames = new Set(files.flatMap((file) => declarationsOnLines(file, "add")).map((declaration) => declaration.name));
+  const addedLines = addedLineTexts(files);
   const removed = files.flatMap((file) => declarationsOnLines(file, "del"));
-  const trulyRemoved = removed.filter((declaration) => !addedNames.has(declaration.name));
+  const trulyRemoved = removed.filter((declaration) => !addedNames.has(declaration.name) && !isRedeclaredAsValue(declaration.name, addedLines));
   return trulyRemoved.slice(0, MAX_SYMBOLS);
 }
 
@@ -60,10 +71,17 @@ function isDeclarationOf(use: SymbolUse, name: string): boolean {
   return language !== undefined && declaredName(use.text, language) === name;
 }
 
-async function findUses(repoDir: string, name: string, sha: string): Promise<SymbolUse[]> {
-  const result = await runCommand("git", ["-C", repoDir, "grep", "-n", "-w", "-I", "-F", name, sha]);
+/** Go names are private to their folder unless capitalized. */
+function isVisibleFrom(use: SymbolUse, declaration: Declaration): boolean {
+  const isPrivateGoName = languageOf(declaration.file) === "go" && /^[a-z_]/.test(declaration.name);
+  return !isPrivateGoName || path.dirname(use.file) === path.dirname(declaration.file);
+}
+
+async function findUses(repoDir: string, declaration: Declaration, sha: string): Promise<SymbolUse[]> {
+  const result = await runCommand("git", ["-C", repoDir, "grep", "-n", "-w", "-I", "-F", declaration.name, sha]);
   const uses = result.stdout.split("\n").map((grepLine) => parseGrepLine(grepLine, sha));
-  return uses.filter((use): use is SymbolUse => use !== undefined && !isDeclarationOf(use, name));
+  const realUses = uses.filter((use): use is SymbolUse => use !== undefined && !isDeclarationOf(use, declaration.name));
+  return realUses.filter((use) => isVisibleFrom(use, declaration));
 }
 
 async function findRecentCommits(repoDir: string, name: string, sha: string): Promise<CommitSummary[]> {
@@ -78,11 +96,13 @@ async function findRecentCommits(repoDir: string, name: string, sha: string): Pr
 }
 
 async function traceDeclaration(repoDir: string, declaration: Declaration, baseSha: string, headSha: string): Promise<RemovedSymbol> {
-  const usedBefore = await findUses(repoDir, declaration.name, baseSha);
-  const usedAfter = await findUses(repoDir, declaration.name, headSha);
+  const usedBefore = await findUses(repoDir, declaration, baseSha);
+  const usedAfter = await findUses(repoDir, declaration, headSha);
   return {
     name: declaration.name,
     file: declaration.file,
+    usedBeforeCount: usedBefore.length,
+    usedAfterCount: usedAfter.length,
     usedBefore: usedBefore.slice(0, MAX_USES_SHOWN),
     usedAfter: usedAfter.slice(0, MAX_USES_SHOWN),
     recentCommits: await findRecentCommits(repoDir, declaration.name, baseSha),

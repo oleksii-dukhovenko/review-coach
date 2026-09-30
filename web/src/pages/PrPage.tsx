@@ -67,7 +67,9 @@ export function PrPage({ route }: { route: PrRoute }) {
 
   const load = () => api.prPage(route).then(setPage, (loadError: Error) => setError(loadError.message));
 
-  useEffect(() => void load(), []);
+  useEffect(() => {
+    void load();
+  }, []);
   useEffect(() => {
     if (!isBuilding(page)) return;
     const timer = setInterval(() => void load(), POLL_WHILE_BUILDING_MS);

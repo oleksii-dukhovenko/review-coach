@@ -74,7 +74,7 @@ export const api = {
   saveConcept: (concept: Concept) => requestJson<Concept>("POST", "/api/concepts", concept),
 };
 
-export type AskInput = { file: string; line: number; side: "LEFT" | "RIGHT"; question: string };
+export type AskInput = { file: string; line: number; side: "LEFT" | "RIGHT"; question: string; keepInHistory?: boolean };
 
 type SseEvent = { event: string; data: string };
 

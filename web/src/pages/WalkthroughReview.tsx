@@ -19,6 +19,16 @@ function isAtLine(item: { line: number; side: string }, lineRef: LineRef): boole
   return item.line === lineRef.line && item.side === lineRef.side;
 }
 
+/** Notes and questions sit under the last line they cover. */
+function isAfterBlock(item: { line: number; endLine?: number; side: string }, lineRef: LineRef): boolean {
+  const lastLine = Math.max(item.endLine ?? item.line, item.line);
+  return lastLine === lineRef.line && item.side === lineRef.side;
+}
+
+function blockEnd(item: { line: number; endLine?: number; side: "LEFT" | "RIGHT" }): LineRef {
+  return { line: Math.max(item.endLine ?? item.line, item.line), side: item.side };
+}
+
 type Coaching = {
   route: PrRoute;
   asks: AskRecord[];
@@ -52,8 +62,8 @@ function LineAnnotations({ file, notes, questions, lineRef, coaching }: {
 }
 
 function annotationsAt(stop: TourStop, coaching: Coaching, lineRef: LineRef): ReactNode {
-  const notes = stop.notes.filter((note) => isAtLine(note, lineRef));
-  const questions = stop.questions.filter((question) => isAtLine(question, lineRef));
+  const notes = stop.notes.filter((note) => isAfterBlock(note, lineRef));
+  const questions = stop.questions.filter((question) => isAfterBlock(question, lineRef));
   const isAskOpen = coaching.openAsk?.file === stop.file && isAtLine(coaching.openAsk, lineRef);
   const hasAnything = notes.length > 0 || questions.length > 0 || isAskOpen;
   if (!hasAnything) return null;
@@ -61,7 +71,7 @@ function annotationsAt(stop: TourStop, coaching: Coaching, lineRef: LineRef): Re
 }
 
 function OutsideDiffItems({ stop, file, coaching }: { stop: TourStop; file: DiffFile | undefined; coaching: Coaching }) {
-  const isOutside = (item: LineRef) => !file || !isInDiff(file, item);
+  const isOutside = (item: TeachingNoteData | CoachingQuestionData) => !file || !isInDiff(file, blockEnd(item));
   const notes = stop.notes.filter(isOutside);
   const questions = stop.questions.filter(isOutside);
   if (notes.length === 0 && questions.length === 0) return null;

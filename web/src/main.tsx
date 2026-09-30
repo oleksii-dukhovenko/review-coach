@@ -23,7 +23,9 @@ function useHashRoute(): PrRoute | undefined {
 
 function App() {
   const route = useHashRoute();
-  useEffect(() => window.scrollTo(0, 0), [route?.owner, route?.repo, route?.number]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [route?.owner, route?.repo, route?.number]);
   return (
     <div className="app">
       <header className="topbar">

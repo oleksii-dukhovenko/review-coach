@@ -5,7 +5,14 @@ import { getAskSession, getJob, getPr, saveAsk, saveAskSession } from "./db.ts";
 import { askPrompt } from "./prompts.ts";
 import type { DiffFile } from "./types.ts";
 
-export type Question = { file: string; line: number; side: "LEFT" | "RIGHT"; question: string };
+export type Question = {
+  file: string;
+  line: number;
+  side: "LEFT" | "RIGHT";
+  question: string;
+  // - False for answer checks, which have their own place.
+  keepInHistory?: boolean;
+};
 
 function jobFiles(prKey: string): DiffFile[] {
   const job = getJob(prKey, "walkthrough") ?? getJob(prKey, "triage");
@@ -42,5 +49,6 @@ export async function answerQuestion(prKey: string, question: Question, onText: 
   const prompt = askPrompt({ ...question, codeLine: codeAtLine(prKey, question), isFirstAsk: session.isFirstAsk });
   const answer = await streamClaude({ cwd: worktree, prompt, ...session, addDirs: [config.conceptsDir] }, onText);
   saveAskSession(prKey, answer.sessionId);
+  if (question.keepInHistory === false) return;
   saveAsk({ prKey, file: question.file, line: question.line, question: question.question, answer: answer.text });
 }

@@ -23,7 +23,7 @@ function patchForReview(files: DiffFile[]): string {
 function describeRemovedCode(removed: RemovedSymbol[]): string {
   if (removed.length === 0) return "No functions were deleted.";
   return removed
-    .map((symbol) => `- ${symbol.name} (from ${symbol.file}): mentioned in ${symbol.usedBefore.length} places before, ${symbol.usedAfter.length} after`)
+    .map((symbol) => `- ${symbol.name} (from ${symbol.file}): mentioned in ${symbol.usedBeforeCount} places before, ${symbol.usedAfterCount} after`)
     .join("\n");
 }
 

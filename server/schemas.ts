@@ -21,6 +21,7 @@ const flowStep = z.object({
 
 const teachingNote = z.object({
   line: z.number().int(),
+  endLine: z.number().int().describe("Last line the note is about. Same as line for one line."),
   side,
   kind: z.enum(["syntax", "pattern", "design"]),
   conceptKey: z.string().describe("kebab-case id, e.g. go-defer, sql-transaction"),
@@ -32,6 +33,7 @@ const teachingNote = z.object({
 const coachingQuestion = z.object({
   id: z.string().describe("Unique within this walkthrough, e.g. q1"),
   line: z.number().int(),
+  endLine: z.number().int().describe("Last line the question is about. Same as line for one line."),
   side,
   question: z.string().describe("Starts with 'Did you notice' or asks what I would do. Never states the answer."),
   because: z.string().describe("The answer: what goes wrong and for whom, consequence first"),

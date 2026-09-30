@@ -55,6 +55,9 @@ export type CommitSummary = { sha: string; author: string; date: string; subject
 export type RemovedSymbol = {
   name: string;
   file: string;
+  usedBeforeCount: number;
+  usedAfterCount: number;
+  // - First few mentions only.
   usedBefore: SymbolUse[];
   usedAfter: SymbolUse[];
   recentCommits: CommitSummary[];

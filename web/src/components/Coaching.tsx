@@ -71,14 +71,14 @@ export function CoachingQuestion({ route, file, question, answer = EMPTY_ANSWER,
     try {
       const prompt = checkAnswerPrompt(question, answer.typed);
       const onFeedback = (feedback: string) => onChange({ ...answer, feedback, revealed: true });
-      await askQuestion(route, { file, line: question.line, side: question.side, question: prompt }, onFeedback);
+      await askQuestion(route, { file, line: question.line, side: question.side, question: prompt, keepInHistory: false }, onFeedback);
     } finally {
       setIsChecking(false);
     }
   }
 
   const decide = (decision: Decision) => {
-    const draft = answer.draft || answer.typed || question.suggestedComment;
+    const draft = answer.draft || question.suggestedComment;
     update({ decision, draft, revealed: true });
   };
 
