@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from "react";
 
 import type { DiffFile, DiffLine } from "../api.ts";
 import { highlightLine, languageForFile } from "./highlight.ts";
+import { wordAtClick } from "./wordAtPoint.ts";
 
 export type LineRef = { line: number; side: "LEFT" | "RIGHT" };
 
@@ -10,6 +11,7 @@ type DiffViewProps = {
   // - Extra rows to show under a line, or null.
   annotationsFor: (lineRef: LineRef) => ReactNode;
   onLineClick: (lineRef: LineRef) => void;
+  onWordClick: (lineRef: LineRef, word: string) => void;
 };
 
 const MARKER = { add: "+", del: "-", ctx: " " } as const;
@@ -19,14 +21,25 @@ export function lineRefOf(diffLine: DiffLine): LineRef {
   return diffLine.kind === "del" ? { line: diffLine.oldLine!, side: "LEFT" } : { line: diffLine.newLine!, side: "RIGHT" };
 }
 
-function DiffRow({ diffLine, language, onLineClick }: { diffLine: DiffLine; language?: string; onLineClick: DiffViewProps["onLineClick"] }) {
+type DiffRowProps = Pick<DiffViewProps, "onLineClick" | "onWordClick"> & { diffLine: DiffLine; language?: string };
+
+function isPeekClick(event: React.MouseEvent): boolean {
+  return event.ctrlKey || event.metaKey;
+}
+
+function DiffRow({ diffLine, language, onLineClick, onWordClick }: DiffRowProps) {
   const askHere = () => onLineClick(lineRefOf(diffLine));
+  const peekWord = (event: React.MouseEvent<HTMLElement>) => {
+    if (!isPeekClick(event)) return;
+    const word = wordAtClick(event, diffLine.text);
+    if (word) onWordClick(lineRefOf(diffLine), word);
+  };
   return (
     <tr className={diffLine.kind}>
       <td className="line-number" onClick={askHere} title="Ask about this line">{diffLine.oldLine ?? ""}</td>
       <td className="line-number" onClick={askHere} title="Ask about this line">{diffLine.newLine ?? ""}</td>
       <td className="marker">{MARKER[diffLine.kind]}</td>
-      <td className="code" dangerouslySetInnerHTML={{ __html: highlightLine(diffLine.text, language) || " " }} />
+      <td className="code" onClick={peekWord} dangerouslySetInnerHTML={{ __html: highlightLine(diffLine.text, language) || " " }} />
     </tr>
   );
 }
@@ -39,7 +52,7 @@ function AnnotationRow({ children }: { children: ReactNode }) {
   );
 }
 
-export function DiffView({ file, annotationsFor, onLineClick }: DiffViewProps) {
+export function DiffView({ file, annotationsFor, onLineClick, onWordClick }: DiffViewProps) {
   const language = languageForFile(file.path);
   if (file.isBinary) return <div className="card muted">Binary file, not shown.</div>;
   return (
@@ -55,7 +68,7 @@ export function DiffView({ file, annotationsFor, onLineClick }: DiffViewProps) {
               const annotations = annotationsFor(lineRefOf(diffLine));
               return (
                 <Fragment key={lineIndex}>
-                  <DiffRow diffLine={diffLine} language={language} onLineClick={onLineClick} />
+                  <DiffRow diffLine={diffLine} language={language} onLineClick={onLineClick} onWordClick={onWordClick} />
                   {annotations ? <AnnotationRow>{annotations}</AnnotationRow> : null}
                 </Fragment>
               );

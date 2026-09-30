@@ -6,7 +6,9 @@ import type { JobStatus, PrKind, PullRequest } from "../../server/types.ts";
 export type { Concept, AskRecord, JobRecord, ReviewCommentInput, ReviewEvent, PullRequest };
 export type { Walkthrough, Triage } from "../../server/schemas.ts";
 export type { WalkthroughData, TriageData } from "../../server/walkthrough.ts";
-export type { DiffFile, DiffLine, RemovedSymbol } from "../../server/types.ts";
+export type { DiffFile, DiffLine, RemovedSymbol, SymbolUse } from "../../server/types.ts";
+export type { ReferenceSearch, Snippet } from "../../server/references.ts";
+import type { ReferenceSearch, Snippet } from "../../server/references.ts";
 
 export type InboxRow = {
   key: string;
@@ -72,6 +74,10 @@ export const api = {
   reply: (route: PrRoute, threadId: string, body: string) =>
     requestJson<{ url: string }>("POST", `${prUrl(route)}/reply`, { threadId, body }),
   saveConcept: (concept: Concept) => requestJson<Concept>("POST", "/api/concepts", concept),
+  references: (route: PrRoute, word: string, fromFile: string) =>
+    requestJson<ReferenceSearch>("GET", `${prUrl(route)}/references?${new URLSearchParams({ word, file: fromFile })}`),
+  snippet: (route: PrRoute, file: string, line: number) =>
+    requestJson<Snippet>("GET", `${prUrl(route)}/snippet?${new URLSearchParams({ file, line: String(line) })}`),
 };
 
 export type AskInput = { file: string; line: number; side: "LEFT" | "RIGHT"; question: string; keepInHistory?: boolean };

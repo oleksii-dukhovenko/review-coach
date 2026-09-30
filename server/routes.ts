@@ -7,6 +7,7 @@ import { getJob, getPr, getReviewState, getSetting, listAsks, listInboxPrs, save
 import { refreshAndRecord } from "./inbox.ts";
 import { replyToThread, submitReview, type ReviewSubmission } from "./posting.ts";
 import { enqueue, isPaused, resumeQueue } from "./queue.ts";
+import { findReferences, isIdentifier, readSnippet } from "./references.ts";
 import { prKeyOf, type PullRequest } from "./types.ts";
 import { threadsFingerprint } from "./walkthrough.ts";
 
@@ -115,6 +116,18 @@ export function buildRoutes(): Hono {
     const { threadId, body } = (await context.req.json()) as { threadId: string; body: string };
     const url = await replyToThread(requirePr(context).key, threadId, body);
     return context.json({ url });
+  });
+
+  api.get(`${prPath}/references`, async (context) => {
+    const word = context.req.query("word") ?? "";
+    if (!isIdentifier(word)) return context.json({ error: "Not a name" }, 400);
+    return context.json(await findReferences(requirePr(context), word, context.req.query("file") ?? ""));
+  });
+
+  api.get(`${prPath}/snippet`, async (context) => {
+    const file = context.req.query("file") ?? "";
+    const line = Number(context.req.query("line"));
+    return context.json(await readSnippet(requirePr(context), file, line, 7));
   });
 
   api.get("/concepts", (context) => context.json(listConcepts()));

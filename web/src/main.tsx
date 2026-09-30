@@ -21,7 +21,25 @@ function useHashRoute(): PrRoute | undefined {
   return routeFromHash(hash);
 }
 
+/** Shows a pointer over code while Ctrl or Cmd is held. */
+function useModifierClass() {
+  useEffect(() => {
+    const updateClass = (event: KeyboardEvent | MouseEvent) =>
+      document.body.classList.toggle("peek-key-held", event.ctrlKey || event.metaKey);
+    const clearClass = () => document.body.classList.remove("peek-key-held");
+    window.addEventListener("keydown", updateClass);
+    window.addEventListener("keyup", updateClass);
+    window.addEventListener("blur", clearClass);
+    return () => {
+      window.removeEventListener("keydown", updateClass);
+      window.removeEventListener("keyup", updateClass);
+      window.removeEventListener("blur", clearClass);
+    };
+  }, []);
+}
+
 function App() {
+  useModifierClass();
   const route = useHashRoute();
   useEffect(() => {
     window.scrollTo(0, 0);

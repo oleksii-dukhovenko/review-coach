@@ -4,6 +4,7 @@ import { api, type AskRecord, type Concept, type DiffFile, type PrPageData, type
 import { CoachingQuestion, TeachingNote, type CoachingQuestionData, type TeachingNoteData } from "../components/Coaching.tsx";
 import { DiffView, isInDiff, type LineRef } from "../components/DiffView.tsx";
 import { LineBox, LineCommentView } from "../components/LineBox.tsx";
+import { PeekReferences } from "../components/PeekReferences.tsx";
 import { Markdown } from "../components/basics.tsx";
 import { useSavedState, type LineComment, type QuestionAnswer, type ReviewState } from "../savedState.ts";
 import { FinishPanel } from "./FinishPanel.tsx";
@@ -12,6 +13,8 @@ import { FlowSection, RemovedCodeSection, skimFiles, StorySection, tourStopId } 
 type TourStop = WalkthroughData["walkthrough"]["tour"][number];
 
 type OpenAsk = { file: string } & LineRef;
+
+type OpenPeek = { file: string; word: string } & LineRef;
 
 const DEFAULT_REVIEW_STATE: ReviewState = { answers: {}, lineComments: [], summary: "", verdict: null, postedUrl: null };
 
@@ -36,6 +39,8 @@ type Coaching = {
   answers: Record<string, QuestionAnswer>;
   openAsk: OpenAsk | null;
   setOpenAsk: (ask: OpenAsk | null) => void;
+  openPeek: OpenPeek | null;
+  setOpenPeek: (peek: OpenPeek | null) => void;
   saveAnswer: (questionId: string, answer: QuestionAnswer) => void;
   saveConcept: (note: TeachingNoteData, status: Concept["status"]) => void;
   lineComments: LineComment[];
@@ -54,8 +59,13 @@ function LineAnnotations({ file, notes, questions, lineRef, coaching }: {
   const isAskOpen = coaching.openAsk?.file === file && isAtLine(coaching.openAsk, lineRef);
   const pastAsks = coaching.asks.filter((ask) => ask.file === file && ask.line === lineRef.line);
   const comments = commentsAt(coaching, file, lineRef);
+  const peek = coaching.openPeek?.file === file && isAtLine(coaching.openPeek, lineRef) ? coaching.openPeek : null;
   return (
     <>
+      {peek ? (
+        <PeekReferences key={peek.word} route={coaching.route} word={peek.word} fromFile={file} fromLine={lineRef.line}
+          onClose={() => coaching.setOpenPeek(null)} />
+      ) : null}
       {notes.map((note, noteIndex) => (
         <TeachingNote key={noteIndex} note={note} concept={coaching.conceptsByKey.get(note.conceptKey)} onSave={(status) => coaching.saveConcept(note, status)} />
       ))}
@@ -80,7 +90,8 @@ function annotationsAt(stop: TourStop, coaching: Coaching, lineRef: LineRef): Re
   const questions = stop.questions.filter((question) => isAfterBlock(question, lineRef));
   const isAskOpen = coaching.openAsk?.file === stop.file && isAtLine(coaching.openAsk, lineRef);
   const hasComments = commentsAt(coaching, stop.file, lineRef).length > 0;
-  const hasAnything = notes.length > 0 || questions.length > 0 || isAskOpen || hasComments;
+  const isPeekOpen = coaching.openPeek?.file === stop.file && isAtLine(coaching.openPeek, lineRef);
+  const hasAnything = notes.length > 0 || questions.length > 0 || isAskOpen || hasComments || isPeekOpen;
   if (!hasAnything) return null;
   return <LineAnnotations file={stop.file} notes={notes} questions={questions} lineRef={lineRef} coaching={coaching} />;
 }
@@ -116,7 +127,8 @@ function TourStopView({ stop, stopNumber, file, coaching }: { stop: TourStop; st
       <OutsideDiffItems stop={stop} file={file} coaching={coaching} />
       {file ? (
         <DiffView file={file} annotationsFor={(lineRef) => annotationsAt(stop, coaching, lineRef)}
-          onLineClick={(lineRef) => coaching.setOpenAsk({ file: stop.file, ...lineRef })} />
+          onLineClick={(lineRef) => coaching.setOpenAsk({ file: stop.file, ...lineRef })}
+          onWordClick={(lineRef, word) => coaching.setOpenPeek({ file: stop.file, word, ...lineRef })} />
       ) : (
         <div className="card muted small">This file is not in the diff.</div>
       )}
@@ -135,7 +147,8 @@ function SkimSection({ files, coaching }: { files: DiffFile[]; coaching: Coachin
         <details key={file.path} className="card">
           <summary><span className="mono">{file.path}</span> <span className="chip">{file.tagReason}</span></summary>
           <DiffView file={file} annotationsFor={(lineRef) => annotationsAt(emptyStop(file), coaching, lineRef)}
-            onLineClick={(lineRef) => coaching.setOpenAsk({ file: file.path, ...lineRef })} />
+            onLineClick={(lineRef) => coaching.setOpenAsk({ file: file.path, ...lineRef })}
+            onWordClick={(lineRef, word) => coaching.setOpenPeek({ file: file.path, word, ...lineRef })} />
         </details>
       ))}
     </section>
@@ -165,6 +178,7 @@ function lineCommentActions(setState: ReviewStateSetter) {
 
 function useCoaching(route: PrRoute, page: PrPageData, state: ReviewState, setState: ReviewStateSetter): Coaching {
   const [openAsk, setOpenAsk] = useState<OpenAsk | null>(null);
+  const [openPeek, setOpenPeek] = useState<OpenPeek | null>(null);
   const [concepts, setConcepts] = useState(page.concepts);
   const saveConcept = (note: TeachingNoteData, status: Concept["status"]) => {
     const concept = { conceptKey: note.conceptKey, title: note.title, status, explanation: note.explanation, jsExample: note.jsExample, seenIn: [page.pr.key] };
@@ -174,7 +188,7 @@ function useCoaching(route: PrRoute, page: PrPageData, state: ReviewState, setSt
   const saveAnswer = (questionId: string, answer: QuestionAnswer) =>
     setState((current) => ({ ...current, answers: { ...current.answers, [questionId]: answer } }));
   return {
-    route, asks: page.asks, conceptsByKey, answers: state.answers, openAsk, setOpenAsk, saveAnswer, saveConcept,
+    route, asks: page.asks, conceptsByKey, answers: state.answers, openAsk, setOpenAsk, openPeek, setOpenPeek, saveAnswer, saveConcept,
     lineComments: state.lineComments, ...lineCommentActions(setState),
   };
 }
@@ -189,7 +203,7 @@ export function WalkthroughReview({ route, page }: { route: PrRoute; page: PrPag
 
   return (
     <>
-      <p className="small muted">Click any line number to ask about that line or comment on it.</p>
+      <p className="small muted">Click any line number to ask about that line or comment on it. Ctrl+click a name to see everywhere it is used.</p>
       <StorySection story={data.walkthrough.story} />
       <FlowSection flow={data.walkthrough.flow} />
       <RemovedCodeSection removed={data.removed} />
