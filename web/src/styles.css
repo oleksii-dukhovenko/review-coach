@@ -219,3 +219,5 @@ details > summary { cursor: pointer; }
   .diff tr.annotation td { padding-left: 12px; }
   .inbox-row { grid-template-columns: 1fr; }
 }
+
+.card, .markdown { overflow-wrap: anywhere; min-width: 0; }
