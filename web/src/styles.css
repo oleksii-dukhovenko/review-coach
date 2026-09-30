@@ -71,7 +71,7 @@ a:hover { text-decoration: underline; }
   padding: 10px 16px;
 }
 .brand { font-weight: 700; color: var(--text); }
-.content { max-width: 1180px; margin: 0 auto; padding: 20px 16px 80px; }
+.content { max-width: 1560px; margin: 0 auto; padding: 20px 16px 80px; }
 
 h1 { font-size: 22px; margin: 0 0 4px; }
 h2 { font-size: 18px; margin: 28px 0 10px; }
@@ -258,3 +258,13 @@ details > summary { cursor: pointer; }
   .peek-body { grid-template-columns: 1fr; grid-template-rows: 180px 1fr; height: 440px; }
   .peek-list { border-left: none; border-top: 1px solid var(--border); }
 }
+
+/* Side by side diff */
+.diff.split > tbody > tr > td.side-del { background: var(--del-bg); }
+.diff.split > tbody > tr > td.side-add { background: var(--add-bg); }
+.diff.split > tbody > tr > td.line-number.side-del { color: var(--del-marker); }
+.diff.split > tbody > tr > td.line-number.side-add { color: var(--add-marker); }
+.diff.split > tbody > tr > td.empty-side {
+  background: repeating-linear-gradient(135deg, var(--surface-muted), var(--surface-muted) 4px, var(--surface) 4px, var(--surface) 8px);
+}
+.diff.split > tbody > tr.split-row > td:nth-child(2) { border-right: 1px solid var(--border); }

@@ -6,7 +6,7 @@ import type { JobStatus, PrKind, PullRequest } from "../../server/types.ts";
 export type { Concept, AskRecord, JobRecord, ReviewCommentInput, ReviewEvent, PullRequest };
 export type { Walkthrough, Triage } from "../../server/schemas.ts";
 export type { WalkthroughData, TriageData } from "../../server/walkthrough.ts";
-export type { DiffFile, DiffLine, RemovedSymbol, SymbolUse } from "../../server/types.ts";
+export type { DiffFile, DiffHunk, DiffLine, RemovedSymbol, SymbolUse } from "../../server/types.ts";
 export type { ReferenceSearch, Snippet } from "../../server/references.ts";
 import type { ReferenceSearch, Snippet } from "../../server/references.ts";
 

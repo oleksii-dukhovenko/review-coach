@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { api, type AskRecord, type Concept, type DiffFile, type PrPageData, type PrRoute, type WalkthroughData } from "../api.ts";
 import { CoachingQuestion, TeachingNote, type CoachingQuestionData, type TeachingNoteData } from "../components/Coaching.tsx";
 import { DiffView, isInDiff, type LineRef } from "../components/DiffView.tsx";
+import { setDiffLayout, useDiffLayout } from "../components/diffLayout.ts";
 import { LineBox, LineCommentView } from "../components/LineBox.tsx";
 import { PeekReferences } from "../components/PeekReferences.tsx";
 import { Markdown } from "../components/basics.tsx";
@@ -193,6 +194,17 @@ function useCoaching(route: PrRoute, page: PrPageData, state: ReviewState, setSt
   };
 }
 
+function LayoutToggle() {
+  const layout = useDiffLayout();
+  return (
+    <div className="button-row" style={{ alignItems: "center" }}>
+      <span className="small muted">Diff:</span>
+      <button className={layout === "split" ? "primary" : ""} onClick={() => setDiffLayout("split")}>Side by side</button>
+      <button className={layout === "unified" ? "primary" : ""} onClick={() => setDiffLayout("unified")}>Unified</button>
+    </div>
+  );
+}
+
 export function WalkthroughReview({ route, page }: { route: PrRoute; page: PrPageData }) {
   const data = page.job!.data as WalkthroughData;
   const [state, setState] = useSavedState<ReviewState>(route, page.reviewState, DEFAULT_REVIEW_STATE);
@@ -208,6 +220,7 @@ export function WalkthroughReview({ route, page }: { route: PrRoute; page: PrPag
       <FlowSection flow={data.walkthrough.flow} />
       <RemovedCodeSection removed={data.removed} />
       <h2>Guided tour</h2>
+      <LayoutToggle />
       {stops.map((stop, stopIndex) => (
         <TourStopView key={stop.file} stop={stop} stopNumber={stopIndex + 1} file={fileByPath.get(stop.file)} coaching={coaching} />
       ))}
