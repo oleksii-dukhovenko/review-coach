@@ -1,11 +1,11 @@
 import { useState, type ReactNode } from "react";
 
 import { api, type AskRecord, type Concept, type DiffFile, type PrPageData, type PrRoute, type WalkthroughData } from "../api.ts";
-import { AskBox } from "../components/AskBox.tsx";
 import { CoachingQuestion, TeachingNote, type CoachingQuestionData, type TeachingNoteData } from "../components/Coaching.tsx";
 import { DiffView, isInDiff, type LineRef } from "../components/DiffView.tsx";
+import { LineBox, LineCommentView } from "../components/LineBox.tsx";
 import { Markdown } from "../components/basics.tsx";
-import { useSavedState, type QuestionAnswer, type ReviewState } from "../savedState.ts";
+import { useSavedState, type LineComment, type QuestionAnswer, type ReviewState } from "../savedState.ts";
 import { FinishPanel } from "./FinishPanel.tsx";
 import { FlowSection, RemovedCodeSection, skimFiles, StorySection, tourStopId } from "./WalkthroughSections.tsx";
 
@@ -13,7 +13,7 @@ type TourStop = WalkthroughData["walkthrough"]["tour"][number];
 
 type OpenAsk = { file: string } & LineRef;
 
-const DEFAULT_REVIEW_STATE: ReviewState = { answers: {}, summary: "", verdict: null, postedUrl: null };
+const DEFAULT_REVIEW_STATE: ReviewState = { answers: {}, lineComments: [], summary: "", verdict: null, postedUrl: null };
 
 function isAtLine(item: { line: number; side: string }, lineRef: LineRef): boolean {
   return item.line === lineRef.line && item.side === lineRef.side;
@@ -38,13 +38,22 @@ type Coaching = {
   setOpenAsk: (ask: OpenAsk | null) => void;
   saveAnswer: (questionId: string, answer: QuestionAnswer) => void;
   saveConcept: (note: TeachingNoteData, status: Concept["status"]) => void;
+  lineComments: LineComment[];
+  addLineComment: (file: string, lineRef: LineRef, body: string) => void;
+  updateLineComment: (commentId: string, body: string) => void;
+  removeLineComment: (commentId: string) => void;
 };
+
+function commentsAt(coaching: Coaching, file: string, lineRef: LineRef): LineComment[] {
+  return coaching.lineComments.filter((comment) => comment.file === file && isAtLine(comment, lineRef));
+}
 
 function LineAnnotations({ file, notes, questions, lineRef, coaching }: {
   file: string; notes: TeachingNoteData[]; questions: CoachingQuestionData[]; lineRef: LineRef; coaching: Coaching;
 }) {
   const isAskOpen = coaching.openAsk?.file === file && isAtLine(coaching.openAsk, lineRef);
   const pastAsks = coaching.asks.filter((ask) => ask.file === file && ask.line === lineRef.line);
+  const comments = commentsAt(coaching, file, lineRef);
   return (
     <>
       {notes.map((note, noteIndex) => (
@@ -54,8 +63,13 @@ function LineAnnotations({ file, notes, questions, lineRef, coaching }: {
         <CoachingQuestion key={question.id} route={coaching.route} file={file} question={question}
           answer={coaching.answers[question.id]} onChange={(answer) => coaching.saveAnswer(question.id, answer)} />
       ))}
+      {comments.map((comment) => (
+        <LineCommentView key={comment.id} comment={comment}
+          onChange={(body) => coaching.updateLineComment(comment.id, body)} onRemove={() => coaching.removeLineComment(comment.id)} />
+      ))}
       {isAskOpen ? (
-        <AskBox route={coaching.route} file={file} line={lineRef.line} side={lineRef.side} pastAsks={pastAsks} onClose={() => coaching.setOpenAsk(null)} />
+        <LineBox route={coaching.route} file={file} lineRef={lineRef} pastAsks={pastAsks}
+          onAddComment={(body) => coaching.addLineComment(file, lineRef, body)} onClose={() => coaching.setOpenAsk(null)} />
       ) : null}
     </>
   );
@@ -65,7 +79,8 @@ function annotationsAt(stop: TourStop, coaching: Coaching, lineRef: LineRef): Re
   const notes = stop.notes.filter((note) => isAfterBlock(note, lineRef));
   const questions = stop.questions.filter((question) => isAfterBlock(question, lineRef));
   const isAskOpen = coaching.openAsk?.file === stop.file && isAtLine(coaching.openAsk, lineRef);
-  const hasAnything = notes.length > 0 || questions.length > 0 || isAskOpen;
+  const hasComments = commentsAt(coaching, stop.file, lineRef).length > 0;
+  const hasAnything = notes.length > 0 || questions.length > 0 || isAskOpen || hasComments;
   if (!hasAnything) return null;
   return <LineAnnotations file={stop.file} notes={notes} questions={questions} lineRef={lineRef} coaching={coaching} />;
 }
@@ -133,7 +148,22 @@ function filesMissingFromTour(files: DiffFile[], tour: TourStop[]): DiffFile[] {
   return files.filter((file) => file.tag !== "skim" && !touredPaths.has(file.path));
 }
 
-function useCoaching(route: PrRoute, page: PrPageData, answers: ReviewState["answers"], saveAnswer: Coaching["saveAnswer"]): Coaching {
+type ReviewStateSetter = (update: (current: ReviewState) => ReviewState) => void;
+
+function lineCommentActions(setState: ReviewStateSetter) {
+  const setComments = (update: (comments: LineComment[]) => LineComment[]) =>
+    setState((current) => ({ ...current, lineComments: update(current.lineComments) }));
+  return {
+    addLineComment: (file: string, lineRef: LineRef, body: string) =>
+      setComments((comments) => [...comments, { id: crypto.randomUUID(), file, ...lineRef, body }]),
+    updateLineComment: (commentId: string, body: string) =>
+      setComments((comments) => comments.map((comment) => (comment.id === commentId ? { ...comment, body } : comment))),
+    removeLineComment: (commentId: string) =>
+      setComments((comments) => comments.filter((comment) => comment.id !== commentId)),
+  };
+}
+
+function useCoaching(route: PrRoute, page: PrPageData, state: ReviewState, setState: ReviewStateSetter): Coaching {
   const [openAsk, setOpenAsk] = useState<OpenAsk | null>(null);
   const [concepts, setConcepts] = useState(page.concepts);
   const saveConcept = (note: TeachingNoteData, status: Concept["status"]) => {
@@ -141,22 +171,25 @@ function useCoaching(route: PrRoute, page: PrPageData, answers: ReviewState["ans
     void api.saveConcept(concept).then((saved) => setConcepts((current) => [...current.filter((existing) => existing.conceptKey !== saved.conceptKey), saved]));
   };
   const conceptsByKey = new Map(concepts.map((concept) => [concept.conceptKey, concept]));
-  return { route, asks: page.asks, conceptsByKey, answers, openAsk, setOpenAsk, saveAnswer, saveConcept };
+  const saveAnswer = (questionId: string, answer: QuestionAnswer) =>
+    setState((current) => ({ ...current, answers: { ...current.answers, [questionId]: answer } }));
+  return {
+    route, asks: page.asks, conceptsByKey, answers: state.answers, openAsk, setOpenAsk, saveAnswer, saveConcept,
+    lineComments: state.lineComments, ...lineCommentActions(setState),
+  };
 }
 
 export function WalkthroughReview({ route, page }: { route: PrRoute; page: PrPageData }) {
   const data = page.job!.data as WalkthroughData;
   const [state, setState] = useSavedState<ReviewState>(route, page.reviewState, DEFAULT_REVIEW_STATE);
-  const saveAnswer = (questionId: string, answer: QuestionAnswer) =>
-    setState((current) => ({ ...current, answers: { ...current.answers, [questionId]: answer } }));
-  const coaching = useCoaching(route, page, state.answers, saveAnswer);
+  const coaching = useCoaching(route, page, state, setState);
   const fileByPath = new Map(data.files.map((file) => [file.path, file]));
   const extraStops = filesMissingFromTour(data.files, data.walkthrough.tour).map((file) => ({ file: file.path, whyItMatters: "Not covered by the walkthrough.", notes: [], questions: [] }));
   const stops = [...data.walkthrough.tour, ...extraStops];
 
   return (
     <>
-      <p className="small muted">Click any line number to ask about that line.</p>
+      <p className="small muted">Click any line number to ask about that line or comment on it.</p>
       <StorySection story={data.walkthrough.story} />
       <FlowSection flow={data.walkthrough.flow} />
       <RemovedCodeSection removed={data.removed} />

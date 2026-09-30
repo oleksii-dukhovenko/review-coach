@@ -6,8 +6,11 @@ export type Decision = "problem" | "fine" | null;
 
 export type QuestionAnswer = { typed: string; feedback: string; revealed: boolean; decision: Decision; draft: string };
 
+export type LineComment = { id: string; file: string; line: number; side: "LEFT" | "RIGHT"; body: string };
+
 export type ReviewState = {
   answers: Record<string, QuestionAnswer>;
+  lineComments: LineComment[];
   summary: string;
   verdict: ReviewEvent | null;
   postedUrl: string | null;

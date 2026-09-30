@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { api, type PrRoute, type ReviewCommentInput, type ReviewEvent, type Walkthrough } from "../api.ts";
 import type { CoachingQuestionData } from "../components/Coaching.tsx";
-import type { ReviewState } from "../savedState.ts";
+import type { LineComment, ReviewState } from "../savedState.ts";
 
 type ConfirmedProblem = { file: string; question: CoachingQuestionData; draft: string };
 
@@ -37,6 +37,33 @@ function toReviewComment(problem: ConfirmedProblem): ReviewCommentInput {
   return { path: problem.file, line: problem.question.line, side: problem.question.side, body: problem.draft };
 }
 
+function lineCommentToReviewComment(comment: LineComment): ReviewCommentInput {
+  return { path: comment.file, line: comment.line, side: comment.side, body: comment.body };
+}
+
+function allReviewComments(problems: ConfirmedProblem[], lineComments: LineComment[]): ReviewCommentInput[] {
+  const writtenComments = lineComments.filter((comment) => comment.body.trim());
+  return [...problems.map(toReviewComment), ...writtenComments.map(lineCommentToReviewComment)];
+}
+
+function OwnLineComment({ comment, setState }: { comment: LineComment; setState: FinishPanelProps["setState"] }) {
+  const updateBody = (body: string) => setState((current) => ({
+    ...current,
+    lineComments: current.lineComments.map((existing) => (existing.id === comment.id ? { ...existing, body } : existing)),
+  }));
+  const remove = () => setState((current) => ({
+    ...current,
+    lineComments: current.lineComments.filter((existing) => existing.id !== comment.id),
+  }));
+  return (
+    <div className="draft">
+      <div className="mono small">{comment.file}:{comment.line} <span className="muted">(your comment)</span></div>
+      <textarea value={comment.body} onChange={(event) => updateBody(event.target.value)} />
+      <div className="button-row"><button onClick={remove}>Remove</button></div>
+    </div>
+  );
+}
+
 function countDecided(walkthrough: Walkthrough, state: ReviewState): { decided: number; total: number } {
   const questions = walkthrough.tour.flatMap((stop) => stop.questions);
   const decided = questions.filter((question) => state.answers[question.id]?.decision).length;
@@ -47,6 +74,7 @@ export function FinishPanel({ route, walkthrough, state, setState }: FinishPanel
   const [isPosting, setIsPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const problems = confirmedProblems(walkthrough, state);
+  const comments = allReviewComments(problems, state.lineComments);
   const suggestion = suggestVerdict(problems.length);
   const verdict = state.verdict ?? suggestion.verdict;
   const progress = countDecided(walkthrough, state);
@@ -55,12 +83,12 @@ export function FinishPanel({ route, walkthrough, state, setState }: FinishPanel
     setState((current) => ({ ...current, answers: { ...current.answers, [questionId]: { ...current.answers[questionId], draft } } }));
 
   async function post() {
-    const summaryLine = `${VERDICT_LABEL[verdict]} with ${problems.length} comment${problems.length === 1 ? "" : "s"}`;
+    const summaryLine = `${VERDICT_LABEL[verdict]} with ${comments.length} comment${comments.length === 1 ? "" : "s"}`;
     if (!window.confirm(`Post this review to GitHub? ${summaryLine}.`)) return;
     setIsPosting(true);
     setError(null);
     try {
-      const { url } = await api.submitReview(route, { event: verdict, body: state.summary, comments: problems.map(toReviewComment) });
+      const { url } = await api.submitReview(route, { event: verdict, body: state.summary, comments });
       setState((current) => ({ ...current, postedUrl: url }));
     } catch (postError) {
       setError(postError instanceof Error ? postError.message : String(postError));
@@ -74,14 +102,15 @@ export function FinishPanel({ route, walkthrough, state, setState }: FinishPanel
       <h2>Finish</h2>
       <div className="card finish">
         <div className="small muted">You decided {progress.decided} of {progress.total} questions.</div>
-        <h3 style={{ marginTop: 10 }}>Your comments ({problems.length})</h3>
-        {problems.length === 0 ? <div className="small muted">Mark a question as "Problem" to add a comment here.</div> : null}
+        <h3 style={{ marginTop: 10 }}>Your comments ({problems.length + state.lineComments.length})</h3>
+        {comments.length === 0 ? <div className="small muted">Mark a question as "Problem", or click a line number and pick "Comment on the PR".</div> : null}
         {problems.map((problem) => (
           <div key={problem.question.id} className="draft">
             <div className="mono small">{problem.file}:{problem.question.line}</div>
             <textarea value={problem.draft} onChange={(event) => updateDraft(problem.question.id, event.target.value)} />
           </div>
         ))}
+        {state.lineComments.map((comment) => <OwnLineComment key={comment.id} comment={comment} setState={setState} />)}
         <h3 style={{ marginTop: 14 }}>Summary (optional)</h3>
         <textarea value={state.summary} onChange={(event) => setState((current) => ({ ...current, summary: event.target.value }))} />
         <h3 style={{ marginTop: 14 }}>Verdict</h3>
