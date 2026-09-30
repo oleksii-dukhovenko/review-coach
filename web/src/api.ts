@@ -1,0 +1,113 @@
+import type { Concept } from "../../server/concepts.ts";
+import type { AskRecord, JobRecord } from "../../server/db.ts";
+import type { ReviewCommentInput, ReviewEvent } from "../../server/github.ts";
+import type { JobStatus, PrKind, PullRequest } from "../../server/types.ts";
+
+export type { Concept, AskRecord, JobRecord, ReviewCommentInput, ReviewEvent, PullRequest };
+export type { Walkthrough, Triage } from "../../server/schemas.ts";
+export type { WalkthroughData, TriageData } from "../../server/walkthrough.ts";
+export type { DiffFile, DiffLine, RemovedSymbol } from "../../server/types.ts";
+
+export type InboxRow = {
+  key: string;
+  owner: string;
+  repo: string;
+  number: number;
+  kind: PrKind;
+  title: string;
+  author: string;
+  url: string;
+  additions: number;
+  deletions: number;
+  updatedAt: string;
+  openThreadCount: number;
+  status: JobStatus;
+  error: string | null;
+  isOutOfDate: boolean;
+};
+
+export type Inbox = {
+  review: InboxRow[];
+  mine: InboxRow[];
+  paused: boolean;
+  lastPollAt: string | null;
+  lastPollError: string | null;
+};
+
+export type PrPageData = {
+  pr: PullRequest;
+  job: JobRecord | null;
+  isOutOfDate: boolean;
+  reviewState: Record<string, unknown>;
+  asks: AskRecord[];
+  concepts: Concept[];
+};
+
+export type PrRoute = { owner: string; repo: string; number: number };
+
+async function requestJson<T>(method: string, url: string, body?: unknown): Promise<T> {
+  const response = await fetch(url, {
+    method,
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error ?? `Request failed: ${response.status}`);
+  return payload as T;
+}
+
+function prUrl(route: PrRoute): string {
+  return `/api/pr/${route.owner}/${route.repo}/${route.number}`;
+}
+
+export const api = {
+  inbox: () => requestJson<Inbox>("GET", "/api/inbox"),
+  refreshInbox: () => requestJson("POST", "/api/inbox/refresh"),
+  resumeQueue: () => requestJson("POST", "/api/queue/resume"),
+  prPage: (route: PrRoute) => requestJson<PrPageData>("GET", prUrl(route)),
+  prepare: (route: PrRoute) => requestJson("POST", `${prUrl(route)}/prepare`),
+  saveState: (route: PrRoute, state: unknown) => requestJson("PUT", `${prUrl(route)}/state`, state),
+  submitReview: (route: PrRoute, review: { event: ReviewEvent; body: string; comments: ReviewCommentInput[] }) =>
+    requestJson<{ url: string }>("POST", `${prUrl(route)}/review`, review),
+  reply: (route: PrRoute, threadId: string, body: string) =>
+    requestJson<{ url: string }>("POST", `${prUrl(route)}/reply`, { threadId, body }),
+  saveConcept: (concept: Concept) => requestJson<Concept>("POST", "/api/concepts", concept),
+};
+
+export type AskInput = { file: string; line: number; side: "LEFT" | "RIGHT"; question: string };
+
+type SseEvent = { event: string; data: string };
+
+function parseSseBlocks(buffer: string): { events: SseEvent[]; rest: string } {
+  const blocks = buffer.split("\n\n");
+  const rest = blocks.pop() ?? "";
+  const events = blocks.map((block) => {
+    const eventLine = block.split("\n").find((line) => line.startsWith("event:"));
+    const dataLines = block.split("\n").filter((line) => line.startsWith("data:"));
+    return { event: eventLine?.slice(6).trim() ?? "message", data: dataLines.map((line) => line.slice(5).trim()).join("\n") };
+  });
+  return { events, rest };
+}
+
+/** Streams an answer; onText gets the full answer so far. */
+export async function askQuestion(route: PrRoute, input: AskInput, onText: (answerSoFar: string) => void): Promise<string> {
+  const response = await fetch(`${prUrl(route)}/ask`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!response.body) throw new Error("No answer stream");
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  let answer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) return answer;
+    const parsed = parseSseBlocks(buffer + value);
+    buffer = parsed.rest;
+    for (const sseEvent of parsed.events) {
+      if (sseEvent.event === "error") throw new Error(JSON.parse(sseEvent.data));
+      if (sseEvent.event === "text") onText((answer += JSON.parse(sseEvent.data)));
+    }
+  }
+}

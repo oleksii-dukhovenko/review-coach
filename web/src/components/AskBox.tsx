@@ -1,0 +1,77 @@
+import { useState } from "react";
+
+import { askQuestion, type AskRecord, type PrRoute } from "../api.ts";
+import { Markdown } from "./basics.tsx";
+
+type AskBoxProps = {
+  route: PrRoute;
+  file: string;
+  line: number;
+  side: "LEFT" | "RIGHT";
+  pastAsks: AskRecord[];
+  onClose: () => void;
+};
+
+type Exchange = { question: string; answer: string };
+
+function PastExchange({ exchange }: { exchange: Exchange }) {
+  return (
+    <div className="ask-thread">
+      <div className="small"><strong>You:</strong> {exchange.question}</div>
+      <Markdown text={exchange.answer || "..."} />
+    </div>
+  );
+}
+
+export function AskBox({ route, file, line, side, pastAsks, onClose }: AskBoxProps) {
+  const [draft, setDraft] = useState("");
+  const [exchanges, setExchanges] = useState<Exchange[]>(pastAsks.map(({ question, answer }) => ({ question, answer })));
+  const [isAsking, setIsAsking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const updateLatestAnswer = (answerSoFar: string) =>
+    setExchanges((current) => [...current.slice(0, -1), { ...current.at(-1)!, answer: answerSoFar }]);
+
+  async function submit() {
+    const question = draft.trim();
+    if (!question || isAsking) return;
+    setDraft("");
+    setError(null);
+    setIsAsking(true);
+    setExchanges((current) => [...current, { question, answer: "" }]);
+    try {
+      await askQuestion(route, { file, line, side, question }, updateLatestAnswer);
+    } catch (askError) {
+      setError(askError instanceof Error ? askError.message : String(askError));
+    } finally {
+      setIsAsking(false);
+    }
+  }
+
+  const submitOnEnter = (event: React.KeyboardEvent) => {
+    const isPlainEnter = event.key === "Enter" && !event.shiftKey;
+    if (isPlainEnter) {
+      event.preventDefault();
+      void submit();
+    }
+  };
+
+  return (
+    <div className="ask">
+      <div className="small muted">Ask about {file}:{line}</div>
+      {exchanges.map((exchange, exchangeIndex) => <PastExchange key={exchangeIndex} exchange={exchange} />)}
+      {error ? <div className="chip failed">{error}</div> : null}
+      <textarea
+        autoFocus
+        placeholder="What does this do? Why is it here? (Enter to ask, Shift+Enter for a new line)"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={submitOnEnter}
+      />
+      <div className="button-row">
+        <button className="primary" disabled={isAsking || !draft.trim()} onClick={() => void submit()}>{isAsking ? "Thinking..." : "Ask"}</button>
+        <button onClick={onClose}>Close</button>
+      </div>
+    </div>
+  );
+}
