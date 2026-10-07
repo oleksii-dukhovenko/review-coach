@@ -3,6 +3,9 @@ services:
     build: .
     image: review-coach
     env_file: .env
+    environment:
+      # Inside the container it is always 4477; REVIEW_COACH_PORT only picks the port on this computer.
+      REVIEW_COACH_PORT: "4477"
     ports:
       # Only this computer can open it.
       - "127.0.0.1:${REVIEW_COACH_PORT:-4477}:4477"
