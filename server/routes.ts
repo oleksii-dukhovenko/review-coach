@@ -15,6 +15,11 @@ function mainJobs(pr: PullRequest) {
   return mainJobKinds(pr).map((kind) => ({ kind, job: getJob(pr.key, kind) }));
 }
 
+/** Most recently changed PRs first, so new commits and comments are on top. */
+function byNewestActivity(left: PullRequest, right: PullRequest): number {
+  return right.updatedAt.localeCompare(left.updatedAt);
+}
+
 function inboxRow(pr: PullRequest) {
   const jobs = mainJobs(pr);
   const failedJob = jobs.find(({ job }) => job?.status === "failed")?.job;
@@ -68,7 +73,7 @@ export function buildRoutes(): Hono {
   api.onError((error, context) => context.json({ error: errorMessage(error) }, 500));
 
   api.get("/inbox", (context) => {
-    const rows = listInboxPrs().map(inboxRow);
+    const rows = listInboxPrs().sort(byNewestActivity).map(inboxRow);
     return context.json({
       review: rows.filter((row) => row.kind === "review"),
       mine: rows.filter((row) => row.kind === "mine"),
