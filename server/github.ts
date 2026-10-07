@@ -1,3 +1,4 @@
+import { config } from "./config.ts";
 import { runOrThrow } from "./shell.ts";
 import { prKeyOf, type PrKind, type PullRequest, type ReviewThread } from "./types.ts";
 
@@ -36,9 +37,13 @@ export async function fetchViewerLogin(): Promise<string> {
   return cachedViewerLogin;
 }
 
+function repoFilters(): string[] {
+  return config.onlyRepos.flatMap((repo) => ["--repo", repo]);
+}
+
 async function searchOpenPrs(filter: string): Promise<PrRef[]> {
   const hits = await runGhJson<SearchHit[]>([
-    "search", "prs", filter, "--state=open", "--json", "number,repository", "--limit", "50",
+    "search", "prs", filter, ...repoFilters(), "--state=open", "--json", "number,repository", "--limit", "50",
   ]);
   return hits.map(toPrRef);
 }
