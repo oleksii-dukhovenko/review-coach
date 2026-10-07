@@ -1,4 +1,8 @@
-const FLASH_MS = 1600;
+import { addHistoryStep } from "./scrollHistory.ts";
+
+const FLASH_MS = 3000;
+const QUIET_AFTER_SCROLL_MS = 120;
+const LONGEST_SCROLL_MS = 2500;
 
 export function tourStopId(filePath: string): string {
   return `stop-${filePath.replace(/[^a-zA-Z0-9]/g, "-")}`;
@@ -10,17 +14,57 @@ function openCollapsedParents(element: Element): void {
   }
 }
 
-function flash(element: Element): void {
-  element.classList.add("jump-flash");
-  setTimeout(() => element.classList.remove("jump-flash"), FLASH_MS);
+/** Runs once the page stops moving, so you see what comes next. */
+function afterScrollStops(callback: () => void): void {
+  let quietTimer = setTimeout(finish, QUIET_AFTER_SCROLL_MS);
+  const giveUpTimer = setTimeout(finish, LONGEST_SCROLL_MS);
+  function restartQuietTimer() {
+    clearTimeout(quietTimer);
+    quietTimer = setTimeout(finish, QUIET_AFTER_SCROLL_MS);
+  }
+  function finish() {
+    clearTimeout(quietTimer);
+    clearTimeout(giveUpTimer);
+    window.removeEventListener("scroll", restartQuietTimer);
+    callback();
+  }
+  window.addEventListener("scroll", restartQuietTimer, { passive: true });
 }
 
+/** Marks where you landed: a glow once you arrive, then a quiet marker until the next jump. */
+function markLanding(element: Element): void {
+  document.querySelectorAll(".jump-target").forEach((previous) => previous.classList.remove("jump-target"));
+  element.classList.add("jump-target");
+  afterScrollStops(() => {
+    element.classList.remove("jump-flash");
+    void (element as HTMLElement).offsetWidth;
+    element.classList.add("jump-flash");
+    setTimeout(() => element.classList.remove("jump-flash"), FLASH_MS);
+  });
+}
+
+function scrollToFile(stop: HTMLElement): void {
+  if (stop instanceof HTMLDetailsElement) stop.open = true;
+  stop.scrollIntoView({ behavior: "smooth", block: "start" });
+  markLanding(stop.querySelector(".tour-header, summary") ?? stop);
+}
+
+/** Scrolls to a file's tour stop; Back returns to where you were. */
 export function jumpToFile(filePath: string): boolean {
   const stop = document.getElementById(tourStopId(filePath));
   if (!stop) return false;
-  if (stop instanceof HTMLDetailsElement) stop.open = true;
-  stop.scrollIntoView({ behavior: "smooth", block: "start" });
+  addHistoryStep();
+  scrollToFile(stop);
   return true;
+}
+
+/** Scrolls to a page section; Back returns to where you were. */
+export function jumpToSection(sectionId: string): void {
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+  addHistoryStep();
+  section.scrollIntoView({ behavior: "smooth", block: "start" });
+  markLanding(section.querySelector("h2") ?? section);
 }
 
 function findLineRow(filePath: string, line: number, side: "LEFT" | "RIGHT"): HTMLElement | null {
@@ -32,8 +76,9 @@ function findLineRow(filePath: string, line: number, side: "LEFT" | "RIGHT"): HT
 export function jumpToLine(filePath: string, line: number, side: "LEFT" | "RIGHT"): "line" | "file" | "missing" {
   const row = findLineRow(filePath, line, side);
   if (!row) return jumpToFile(filePath) ? "file" : "missing";
+  addHistoryStep();
   openCollapsedParents(row);
   row.scrollIntoView({ behavior: "smooth", block: "center" });
-  flash(row);
+  markLanding(row);
   return "line";
 }

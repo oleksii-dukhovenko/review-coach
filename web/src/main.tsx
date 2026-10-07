@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import type { PrRoute } from "./api.ts";
+import { Icon } from "./components/Icon.tsx";
 import { InboxPage } from "./pages/InboxPage.tsx";
 import { PrPage } from "./pages/PrPage.tsx";
+import { useScrollHistory } from "./scrollHistory.ts";
 import "./styles.css";
 
 function routeFromHash(hash: string): PrRoute | undefined {
@@ -40,6 +42,7 @@ function useModifierClass() {
 
 function App() {
   useModifierClass();
+  useScrollHistory();
   const route = useHashRoute();
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -47,7 +50,10 @@ function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <a href="#/" className="brand">Review Coach</a>
+        <div className="topbar-inner">
+          <a href="#/" className="brand"><span className="brand-mark"><Icon name="check" size={14} /></span>Review Coach</a>
+          <a href="#/" className="topbar-link">Inbox</a>
+        </div>
       </header>
       <main className="content">{route ? <PrPage key={`${route.owner}/${route.repo}/${route.number}`} route={route} /> : <InboxPage />}</main>
     </div>

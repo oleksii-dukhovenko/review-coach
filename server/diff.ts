@@ -1,4 +1,4 @@
-import { runOrThrow } from "./shell.ts";
+import { runCommand, runOrThrow } from "./shell.ts";
 import type { DiffFile, DiffHunk, DiffLine } from "./types.ts";
 
 type ParsedFile = Omit<DiffFile, "tag" | "tagReason">;
@@ -11,6 +11,13 @@ export async function readPrDiff(worktree: string, baseSha: string, headSha: str
     "diff", "--no-color", "--no-ext-diff", "--find-renames", "-U3", `${baseSha}...${headSha}`,
   ]);
   return parseUnifiedDiff(patch);
+}
+
+/** What changed between two commits in these files; empty if either is gone. */
+export async function readInterdiff(repoDir: string, oldSha: string, newSha: string, paths: string[]): Promise<string> {
+  if (paths.length === 0) return "";
+  const result = await runCommand("git", ["-C", repoDir, "diff", "--no-color", "--no-ext-diff", "-U3", oldSha, newSha, "--", ...paths]);
+  return result.exitCode === 0 ? result.stdout : "";
 }
 
 function startFile(headerLine: string): ParsedFile {

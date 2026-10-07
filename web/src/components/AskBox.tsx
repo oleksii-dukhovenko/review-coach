@@ -2,12 +2,12 @@ import { useState } from "react";
 
 import { askQuestion, type AskRecord, type PrRoute } from "../api.ts";
 import { Markdown } from "./basics.tsx";
+import { spanLabel, type LineSpan } from "../../../server/anchors.ts";
 
 type AskBoxProps = {
   route: PrRoute;
   file: string;
-  line: number;
-  side: "LEFT" | "RIGHT";
+  span: LineSpan;
   pastAsks: AskRecord[];
   onClose: () => void;
 };
@@ -23,7 +23,7 @@ function PastExchange({ exchange }: { exchange: Exchange }) {
   );
 }
 
-export function AskBox({ route, file, line, side, pastAsks, onClose }: AskBoxProps) {
+export function AskBox({ route, file, span, pastAsks, onClose }: AskBoxProps) {
   const [draft, setDraft] = useState("");
   const [exchanges, setExchanges] = useState<Exchange[]>(pastAsks.map(({ question, answer }) => ({ question, answer })));
   const [isAsking, setIsAsking] = useState(false);
@@ -40,7 +40,7 @@ export function AskBox({ route, file, line, side, pastAsks, onClose }: AskBoxPro
     setIsAsking(true);
     setExchanges((current) => [...current, { question, answer: "" }]);
     try {
-      await askQuestion(route, { file, line, side, question }, updateLatestAnswer);
+      await askQuestion(route, { file, ...span, question }, updateLatestAnswer);
     } catch (askError) {
       setError(askError instanceof Error ? askError.message : String(askError));
     } finally {
@@ -58,7 +58,7 @@ export function AskBox({ route, file, line, side, pastAsks, onClose }: AskBoxPro
 
   return (
     <div className="ask">
-      <div className="small muted">Ask about {file}:{line}</div>
+      <div className="small muted">Ask about <span className="mono">{file}:{spanLabel(span)}</span></div>
       {exchanges.map((exchange, exchangeIndex) => <PastExchange key={exchangeIndex} exchange={exchange} />)}
       {error ? <div className="chip failed">{error}</div> : null}
       <textarea

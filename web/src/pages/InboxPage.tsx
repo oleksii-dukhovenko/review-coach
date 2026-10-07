@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 
 import { api, type Inbox, type InboxRow } from "../api.ts";
+import { AutoUpdateToggle } from "../components/AutoUpdateToggle.tsx";
 import { ErrorBanner } from "../components/basics.tsx";
+import { Icon } from "../components/Icon.tsx";
 
 const REFRESH_VIEW_MS = 15_000;
 
@@ -27,23 +29,36 @@ function prHash(row: InboxRow): string {
   return `#/pr/${row.owner}/${row.repo}/${row.number}`;
 }
 
+function isOnControl(target: EventTarget): boolean {
+  return target instanceof Element && target.closest("a, button, input, label") !== null;
+}
+
+/** The whole row opens the PR, except its own buttons and links. */
 function InboxRowView({ row, onPrepare }: { row: InboxRow; onPrepare: (row: InboxRow) => void }) {
   const threadLabel = `${row.openThreadCount} comment${row.openThreadCount === 1 ? "" : "s"} waiting`;
+  const openRow = (event: React.MouseEvent) => {
+    if (!isOnControl(event.target)) window.location.hash = prHash(row);
+  };
   return (
-    <div className="inbox-row">
+    <div className="inbox-row" onClick={openRow}>
       <div>
-        <a className="inbox-title" href={prHash(row)}>{row.title}</a>
+        <div className="inbox-line">
+          <span className="repo-pill">{row.repo}</span>
+          <a className="inbox-title" href={prHash(row)}>{row.title}</a>
+        </div>
         <div className="inbox-meta small muted">
-          <span className="mono">{row.repo}#{row.number}</span>
-          <span>by {row.author}</span>
-          <span>+{row.additions} / -{row.deletions}</span>
-          {row.kind === "mine" ? <span>{threadLabel}</span> : null}
-          <a href={row.url} target="_blank" rel="noreferrer">GitHub</a>
+          <span className="mono">#{row.number}</span>
+          <span>{row.author}</span>
+          <span><span className="added-count">+{row.additions}</span> <span className="deleted-count">-{row.deletions}</span></span>
+          {row.isDraft ? <span className="chip">Draft</span> : null}
+          {row.openThreadCount > 0 ? <span><Icon name="message" size={13} /> {threadLabel}</span> : null}
         </div>
       </div>
-      <div className="inbox-meta">
+      <div className="inbox-actions">
+        <AutoUpdateToggle route={row} isOn={row.autoUpdate} isCompact />
         <StatusChip row={row} />
-        {needsPrepareButton(row) ? <button onClick={() => onPrepare(row)}>{row.isOutOfDate ? "Rebuild" : "Prepare"}</button> : null}
+        {needsPrepareButton(row) ? <button className="primary" onClick={() => onPrepare(row)}>{row.isOutOfDate ? "Update" : "Prepare"}</button> : null}
+        <a className="icon-link" href={row.url} target="_blank" rel="noreferrer" title="Open on GitHub"><Icon name="arrowUpRight" /></a>
       </div>
     </div>
   );
@@ -52,7 +67,7 @@ function InboxRowView({ row, onPrepare }: { row: InboxRow; onPrepare: (row: Inbo
 function InboxSection({ title, rows, emptyText, onPrepare }: { title: string; rows: InboxRow[]; emptyText: string; onPrepare: (row: InboxRow) => void }) {
   return (
     <section>
-      <h2>{title} <span className="muted">({rows.length})</span></h2>
+      <div className="section-title"><h2>{title}</h2><span className="count-pill">{rows.length}</span></div>
       {rows.length === 0 ? (
         <div className="empty">{emptyText}</div>
       ) : (
@@ -96,19 +111,21 @@ export function InboxPage() {
 
   if (!inbox) return <p className="muted">{error ?? "Loading..."}</p>;
   return (
-    <>
-      <div className="button-row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-        <h1>Inbox</h1>
-        <div className="inbox-meta small muted">
-          {inbox.lastPollAt ? <span>Checked GitHub {new Date(inbox.lastPollAt).toLocaleTimeString()}</span> : null}
-          <button disabled={isRefreshing} onClick={() => void refreshFromGitHub()}>{isRefreshing ? "Checking..." : "Check now"}</button>
+    <div className="inbox-page">
+      <div className="page-head">
+        <div>
+          <h1>Inbox</h1>
+          <div className="small muted">PRs waiting on you. {inbox.lastPollAt ? `Checked GitHub at ${new Date(inbox.lastPollAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.` : null}</div>
         </div>
+        <button disabled={isRefreshing} onClick={() => void refreshFromGitHub()}>
+          <Icon name="refresh" size={14} /> {isRefreshing ? "Checking..." : "Check now"}
+        </button>
       </div>
       <ErrorBanner message={error} />
       {inbox.lastPollError ? <div className="banner error">Could not reach GitHub. Showing the last list. ({inbox.lastPollError})</div> : null}
       {inbox.paused ? <PausedBanner onResume={resume} /> : null}
       <InboxSection title="Review for others" rows={inbox.review} emptyText="Nobody is waiting on your review." onPrepare={prepare} />
-      <InboxSection title="My PRs" rows={inbox.mine} emptyText="No open comments waiting on you." onPrepare={prepare} />
-    </>
+      <InboxSection title="My PRs" rows={inbox.mine} emptyText="No drafts or open comments waiting on you." onPrepare={prepare} />
+    </div>
   );
 }

@@ -1,0 +1,15 @@
+services:
+  review-coach:
+    build: .
+    image: review-coach
+    env_file: .env
+    ports:
+      # Only this computer can open it.
+      - "127.0.0.1:${REVIEW_COACH_PORT:-4477}:4477"
+    volumes:
+      # Checkouts, the database, and Claude's chat history survive restarts.
+      - review-coach-home:/home/node
+    restart: unless-stopped
+
+volumes:
+  review-coach-home:

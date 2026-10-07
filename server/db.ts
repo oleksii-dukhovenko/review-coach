@@ -3,9 +3,10 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import { config } from "./config.ts";
+import type { MainJobKind } from "./jobKinds.ts";
 import type { JobStatus, PullRequest } from "./types.ts";
 
-export type JobKind = "walkthrough" | "triage" | "guide";
+export type JobKind = MainJobKind | "guide";
 
 export type JobRecord = {
   prKey: string;
@@ -24,6 +25,8 @@ export type AskRecord = {
   prKey: string;
   file: string;
   line: number;
+  // - Set when the question was about several lines.
+  startLine: number | null;
   question: string;
   answer: string;
   createdAt: string;
@@ -68,10 +71,21 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );`;
 
+function hasColumn(database: DatabaseSync, table: string, column: string): boolean {
+  const columns = database.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  return columns.some((existing) => existing.name === column);
+}
+
+/** Columns added after the first release. */
+function addMissingColumns(database: DatabaseSync): void {
+  if (!hasColumn(database, "asks", "start_line")) database.exec("ALTER TABLE asks ADD COLUMN start_line INTEGER");
+}
+
 function openDatabase(): DatabaseSync {
   fs.mkdirSync(path.dirname(config.dbFile), { recursive: true });
   const database = new DatabaseSync(config.dbFile);
   database.exec(SCHEMA);
+  addMissingColumns(database);
   return database;
 }
 
@@ -97,10 +111,15 @@ export function hidePrFromInbox(prKey: string): void {
   database.prepare("UPDATE prs SET in_inbox = 0 WHERE key = ?").run(prKey);
 }
 
+export function autoUpdateSettingKey(prKey: string): string {
+  return `autoUpdate:${prKey}`;
+}
+
 export function deletePrEverywhere(prKey: string): void {
   for (const table of ["jobs", "review_states", "asks", "ask_sessions"]) {
     database.prepare(`DELETE FROM ${table} WHERE pr_key = ?`).run(prKey);
   }
+  database.prepare("DELETE FROM settings WHERE key = ?").run(autoUpdateSettingKey(prKey));
   database.prepare("DELETE FROM prs WHERE key = ?").run(prKey);
 }
 
@@ -170,18 +189,18 @@ export function saveReviewState(prKey: string, state: unknown): void {
 
 export function listAsks(prKey: string): AskRecord[] {
   const rows = database.prepare("SELECT * FROM asks WHERE pr_key = ? ORDER BY id").all(prKey) as {
-    id: number; pr_key: string; file: string; line: number; question: string; answer: string; created_at: string;
+    id: number; pr_key: string; file: string; line: number; start_line: number | null; question: string; answer: string; created_at: string;
   }[];
   return rows.map((row) => ({
-    id: row.id, prKey: row.pr_key, file: row.file, line: row.line,
+    id: row.id, prKey: row.pr_key, file: row.file, line: row.line, startLine: row.start_line,
     question: row.question, answer: row.answer, createdAt: row.created_at,
   }));
 }
 
 export function saveAsk(ask: Omit<AskRecord, "id" | "createdAt">): void {
   database
-    .prepare("INSERT INTO asks (pr_key, file, line, question, answer, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(ask.prKey, ask.file, ask.line, ask.question, ask.answer, new Date().toISOString());
+    .prepare("INSERT INTO asks (pr_key, file, line, start_line, question, answer, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run(ask.prKey, ask.file, ask.line, ask.startLine, ask.question, ask.answer, new Date().toISOString());
 }
 
 export function getAskSession(prKey: string): string | undefined {

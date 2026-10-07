@@ -17,6 +17,7 @@ export type PullRequest = {
   repo: string;
   number: number;
   kind: PrKind;
+  isDraft: boolean;
   title: string;
   body: string;
   author: string;

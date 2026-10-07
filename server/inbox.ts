@@ -1,6 +1,7 @@
 import { removeCheckout } from "./checkout.ts";
-import { deletePrEverywhere, getJob, hidePrFromInbox, listInboxPrs, saveSetting, savePr, type JobKind } from "./db.ts";
+import { autoUpdateSettingKey, deletePrEverywhere, getJob, getSetting, hidePrFromInbox, listInboxPrs, saveSetting, savePr, type JobKind } from "./db.ts";
 import { fetchPrState, fetchPullRequest, searchMyOpenPrs, searchReviewRequests } from "./github.ts";
+import { isOutOfDate, mainJobKinds } from "./jobKinds.ts";
 import { enqueue } from "./queue.ts";
 import type { PrKind, PullRequest } from "./types.ts";
 
@@ -10,8 +11,9 @@ async function fetchAll(refs: PrRef[], kind: PrKind): Promise<PullRequest[]> {
   return Promise.all(refs.map((ref) => fetchPullRequest(ref, kind)));
 }
 
-function hasThreadsWaitingOnMe(pr: PullRequest): boolean {
-  return pr.openThreads.length > 0;
+/** A draft or an open comment gives me something to do. */
+function hasWorkForMe(pr: PullRequest): boolean {
+  return mainJobKinds(pr).length > 0;
 }
 
 function hasNeverBeenBuilt(pr: PullRequest, kind: JobKind): boolean {
@@ -26,10 +28,26 @@ function isWalkthroughReady(pr: PullRequest): boolean {
 /** Prepares ahead only what you will almost always open. */
 function queueFirstBuilds(prs: PullRequest[]): void {
   for (const pr of prs) {
-    const kind = pr.kind === "review" ? "walkthrough" : "triage";
-    if (hasNeverBeenBuilt(pr, kind)) enqueue({ prKey: pr.key, kind });
+    const unbuiltKinds = mainJobKinds(pr).filter((kind) => hasNeverBeenBuilt(pr, kind));
+    unbuiltKinds.forEach((kind) => enqueue({ prKey: pr.key, kind }));
     const needsGuide = isWalkthroughReady(pr) && hasNeverBeenBuilt(pr, "guide");
     if (needsGuide) enqueue({ prKey: pr.key, kind: "guide" });
+  }
+}
+
+export function isAutoUpdateOn(prKey: string): boolean {
+  return getSetting(autoUpdateSettingKey(prKey)) === "true";
+}
+
+export function setAutoUpdate(prKey: string, isOn: boolean): void {
+  saveSetting(autoUpdateSettingKey(prKey), String(isOn));
+}
+
+/** Only PRs you turned it on for, and only finished builds that fell behind. */
+function queueUpdates(prs: PullRequest[]): void {
+  for (const pr of prs.filter((candidate) => isAutoUpdateOn(candidate.key))) {
+    const behindKinds = mainJobKinds(pr).filter((kind) => isOutOfDate(pr, kind, getJob(pr.key, kind)));
+    behindKinds.forEach((kind) => enqueue({ prKey: pr.key, kind }));
   }
 }
 
@@ -51,11 +69,12 @@ async function cleanUpDroppedPrs(currentKeys: Set<string>): Promise<void> {
 export async function refreshInbox(): Promise<void> {
   const [reviewRefs, myRefs] = await Promise.all([searchReviewRequests(), searchMyOpenPrs()]);
   const reviewPrs = await fetchAll(reviewRefs, "review");
-  const myPrs = (await fetchAll(myRefs, "mine")).filter(hasThreadsWaitingOnMe);
+  const myPrs = (await fetchAll(myRefs, "mine")).filter(hasWorkForMe);
   const current = [...reviewPrs, ...myPrs];
   await cleanUpDroppedPrs(new Set(current.map((pr) => pr.key)));
   current.forEach(savePr);
   queueFirstBuilds(current);
+  queueUpdates(current);
 }
 
 export async function refreshAndRecord(): Promise<void> {

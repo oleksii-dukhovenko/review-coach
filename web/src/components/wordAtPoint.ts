@@ -24,17 +24,19 @@ function clickOffsetInCell(clientX: number, clientY: number, cell: HTMLElement):
   return textBeforeClick.toString().length;
 }
 
-function identifierAround(text: string, offset: number): string | undefined {
+export type ClickedWord = { word: string; column: number };
+
+export function identifierAround(text: string, offset: number): ClickedWord | undefined {
   let start = offset;
   while (start > 0 && IDENTIFIER_CHAR.test(text[start - 1])) start--;
   let end = offset;
   while (end < text.length && IDENTIFIER_CHAR.test(text[end])) end++;
   const word = text.slice(start, end);
-  return IDENTIFIER_START.test(word) ? word : undefined;
+  return IDENTIFIER_START.test(word) ? { word, column: start } : undefined;
 }
 
-/** The name under the mouse in a code cell, if any. */
-export function wordAtClick(event: React.MouseEvent<HTMLElement>, lineText: string): string | undefined {
+/** The name under the mouse in a code cell, and where it starts. */
+export function wordAtClick(event: React.MouseEvent<HTMLElement>, lineText: string): ClickedWord | undefined {
   const offset = clickOffsetInCell(event.clientX, event.clientY, event.currentTarget);
   return offset === undefined ? undefined : identifierAround(lineText, offset);
 }

@@ -80,6 +80,13 @@ export function teachingRules(): string {
   ].filter(Boolean).join("\n\n");
 }
 
+const DEFAULT_PROFILE = "a developer who reviews a lot of code, much of it written by AI.";
+
+/** Who the reader is, in their own words: the env var first, then the profile file. */
+export function readerProfile(): string {
+  return process.env.REVIEW_COACH_ABOUT_ME?.trim() || readFileOrEmpty(config.profileFile).trim() || DEFAULT_PROFILE;
+}
+
 export function publicWritingRules(): string {
   return extractSection(readFileOrEmpty(config.personalRulesFile), "# What gets posted publicly");
 }

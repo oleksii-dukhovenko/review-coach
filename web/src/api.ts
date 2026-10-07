@@ -1,14 +1,16 @@
 import type { Concept } from "../../server/concepts.ts";
 import type { AskRecord, JobRecord } from "../../server/db.ts";
 import type { ReviewCommentInput, ReviewEvent } from "../../server/github.ts";
+import type { MainJobKind } from "../../server/jobKinds.ts";
 import type { JobStatus, PrKind, PullRequest } from "../../server/types.ts";
 
-export type { Concept, AskRecord, JobRecord, ReviewCommentInput, ReviewEvent, PullRequest };
-export type { Walkthrough, Triage, Guide } from "../../server/schemas.ts";
+export type { Concept, AskRecord, JobRecord, MainJobKind, ReviewCommentInput, ReviewEvent, PullRequest };
+export type { Walkthrough, Triage, Guide, HardIdea } from "../../server/schemas.ts";
 export type { WalkthroughData, TriageData } from "../../server/walkthrough.ts";
+export type { WalkthroughChange } from "../../server/walkthroughMerge.ts";
 export type { DiffFile, DiffHunk, DiffLine, RemovedSymbol, SymbolUse } from "../../server/types.ts";
-export type { ReferenceSearch, Snippet } from "../../server/references.ts";
-import type { ReferenceSearch, Snippet } from "../../server/references.ts";
+export type { FileView, Reference, ReferenceQuery, ReferenceSearch, Snippet } from "../../server/references.ts";
+import type { FileView, ReferenceQuery, ReferenceSearch, Snippet } from "../../server/references.ts";
 
 export type InboxRow = {
   key: string;
@@ -16,6 +18,7 @@ export type InboxRow = {
   repo: string;
   number: number;
   kind: PrKind;
+  isDraft: boolean;
   title: string;
   author: string;
   url: string;
@@ -23,6 +26,7 @@ export type InboxRow = {
   deletions: number;
   updatedAt: string;
   openThreadCount: number;
+  autoUpdate: boolean;
   status: JobStatus;
   error: string | null;
   isOutOfDate: boolean;
@@ -38,9 +42,13 @@ export type Inbox = {
 
 export type PrPageData = {
   pr: PullRequest;
-  job: JobRecord | null;
+  // - Triage first, then walkthrough.
+  jobKinds: MainJobKind[];
+  walkthrough: JobRecord | null;
+  triage: JobRecord | null;
   guide: JobRecord | null;
-  isOutOfDate: boolean;
+  outOfDate: Record<MainJobKind, boolean>;
+  autoUpdate: boolean;
   reviewState: Record<string, unknown>;
   asks: AskRecord[];
   concepts: Concept[];
@@ -59,6 +67,10 @@ async function requestJson<T>(method: string, url: string, body?: unknown): Prom
   return payload as T;
 }
 
+function queryString(values: Record<string, string | number>): string {
+  return new URLSearchParams(Object.entries(values).map(([key, value]) => [key, String(value)])).toString();
+}
+
 function prUrl(route: PrRoute): string {
   return `/api/pr/${route.owner}/${route.repo}/${route.number}`;
 }
@@ -67,22 +79,36 @@ export const api = {
   inbox: () => requestJson<Inbox>("GET", "/api/inbox"),
   refreshInbox: () => requestJson("POST", "/api/inbox/refresh"),
   resumeQueue: () => requestJson("POST", "/api/queue/resume"),
+  setAutoUpdate: (route: PrRoute, isOn: boolean) => requestJson<{ isOn: boolean }>("PUT", `${prUrl(route)}/auto-update`, { isOn }),
   prPage: (route: PrRoute) => requestJson<PrPageData>("GET", prUrl(route)),
   prepare: (route: PrRoute) => requestJson("POST", `${prUrl(route)}/prepare`),
+  rebuild: (route: PrRoute) => requestJson("POST", `${prUrl(route)}/prepare?force=1`),
   prepareGuide: (route: PrRoute) => requestJson("POST", `${prUrl(route)}/prepare-guide`),
   saveState: (route: PrRoute, state: unknown) => requestJson("PUT", `${prUrl(route)}/state`, state),
+  // - keepalive lets the save finish while the page closes or reloads.
+  saveStateWhileLeaving: (route: PrRoute, state: unknown) =>
+    void fetch(`${prUrl(route)}/state`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(state), keepalive: true }),
   submitReview: (route: PrRoute, review: { event: ReviewEvent; body: string; comments: ReviewCommentInput[] }) =>
     requestJson<{ url: string }>("POST", `${prUrl(route)}/review`, review),
   reply: (route: PrRoute, threadId: string, body: string) =>
     requestJson<{ url: string }>("POST", `${prUrl(route)}/reply`, { threadId, body }),
   saveConcept: (concept: Concept) => requestJson<Concept>("POST", "/api/concepts", concept),
-  references: (route: PrRoute, word: string, fromFile: string) =>
-    requestJson<ReferenceSearch>("GET", `${prUrl(route)}/references?${new URLSearchParams({ word, file: fromFile })}`),
+  references: (route: PrRoute, query: ReferenceQuery) =>
+    requestJson<ReferenceSearch>("GET", `${prUrl(route)}/references?${queryString(query)}`),
+  file: (route: PrRoute, file: string) => requestJson<FileView>("GET", `${prUrl(route)}/file?${new URLSearchParams({ file })}`),
   snippet: (route: PrRoute, file: string, line: number) =>
     requestJson<Snippet>("GET", `${prUrl(route)}/snippet?${new URLSearchParams({ file, line: String(line) })}`),
 };
 
-export type AskInput = { file: string; line: number; side: "LEFT" | "RIGHT"; question: string; keepInHistory?: boolean };
+export type AskInput = {
+  file: string;
+  line: number;
+  side: "LEFT" | "RIGHT";
+  startLine?: number;
+  startSide?: "LEFT" | "RIGHT";
+  question: string;
+  keepInHistory?: boolean;
+};
 
 type SseEvent = { event: string; data: string };
 

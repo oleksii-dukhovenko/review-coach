@@ -1,24 +1,29 @@
 import { useState, type ReactNode } from "react";
 
-import { api, type AskRecord, type Concept, type DiffFile, type PrPageData, type PrRoute, type WalkthroughData } from "../api.ts";
+import { api, type AskRecord, type Concept, type DiffFile, type HardIdea, type PrPageData, type PrRoute, type Reference, type ReferenceQuery, type WalkthroughData } from "../api.ts";
 import { CoachingQuestion, TeachingNote, type CoachingQuestionData, type TeachingNoteData } from "../components/Coaching.tsx";
 import { DiffView, isInDiff, type LineRef } from "../components/DiffView.tsx";
 import { setDiffLayout, useDiffLayout } from "../components/diffLayout.ts";
+import { FileViewer, useFileViewer } from "../components/FileViewer.tsx";
+import { Icon } from "../components/Icon.tsx";
 import { LineBox, LineCommentView } from "../components/LineBox.tsx";
 import { PeekReferences } from "../components/PeekReferences.tsx";
 import { Markdown } from "../components/basics.tsx";
+import { lineTextFor, placeLineComments, type PlacedComment } from "../placeComments.ts";
+import { spanStart, type LineSpan } from "../../../server/anchors.ts";
 import { useSavedState, type LineComment, type QuestionAnswer, type ReviewState } from "../savedState.ts";
 import { FinishPanel } from "./FinishPanel.tsx";
-import { jumpToFile, jumpToLine, tourStopId } from "../jump.ts";
+import { useActiveAnchor } from "../activeAnchor.ts";
+import { jumpToFile, jumpToLine, jumpToSection, tourStopId } from "../jump.ts";
 import { diffFingerprint, reviewedStatusOf, type ReviewedStatus } from "../reviewedFiles.ts";
 import { GuideSection } from "./GuideSection.tsx";
-import { FlowSection, RemovedCodeSection, skimFiles, StorySection } from "./WalkthroughSections.tsx";
+import { AtAGlance, ChangesBanner, FlowSection, HardIdeasSection, PictureSection, RemovedCodeSection, skimFiles } from "./WalkthroughSections.tsx";
 
 type TourStop = WalkthroughData["walkthrough"]["tour"][number];
 
-type OpenAsk = { file: string } & LineRef;
+type OpenAsk = { file: string } & LineSpan;
 
-type OpenPeek = { file: string; word: string } & LineRef;
+type OpenPeek = ReferenceQuery;
 
 const DEFAULT_REVIEW_STATE: ReviewState = { answers: {}, lineComments: [], reviewedFiles: {}, summary: "", verdict: null, postedUrl: null };
 
@@ -46,34 +51,39 @@ type Coaching = {
   openPeek: OpenPeek | null;
   setOpenPeek: (peek: OpenPeek | null) => void;
   saveAnswer: (questionId: string, answer: QuestionAnswer) => void;
-  saveConcept: (note: TeachingNoteData, status: Concept["status"]) => void;
-  lineComments: LineComment[];
-  addLineComment: (file: string, lineRef: LineRef, body: string) => void;
+  saveConcept: (source: ConceptSource, status: Concept["status"]) => void;
+  lineComments: PlacedComment[];
+  addLineComment: (file: string, span: LineSpan, body: string) => void;
   updateLineComment: (commentId: string, body: string) => void;
   removeLineComment: (commentId: string) => void;
   statusOf: (file: DiffFile) => ReviewedStatus;
   toggleReviewed: (file: DiffFile) => void;
-  jumpToReference: (file: string, line: number) => void;
+  jumpToReference: (reference: Reference) => void;
   isRevealed: (filePath: string) => boolean;
   setRevealed: (filePath: string, isRevealed: boolean) => void;
 };
 
-function commentsAt(coaching: Coaching, file: string, lineRef: LineRef): LineComment[] {
-  return coaching.lineComments.filter((comment) => comment.file === file && isAtLine(comment, lineRef));
+function openSpanIn(coaching: Coaching, file: string): LineSpan | undefined {
+  return coaching.openAsk?.file === file ? coaching.openAsk : undefined;
+}
+
+function commentsAt(coaching: Coaching, file: string, lineRef: LineRef): PlacedComment[] {
+  return coaching.lineComments.filter((comment) => !comment.isOutdated && comment.file === file && isAtLine(comment, lineRef));
 }
 
 function LineAnnotations({ file, notes, questions, lineRef, coaching }: {
   file: string; notes: TeachingNoteData[]; questions: CoachingQuestionData[]; lineRef: LineRef; coaching: Coaching;
 }) {
   const isAskOpen = coaching.openAsk?.file === file && isAtLine(coaching.openAsk, lineRef);
-  const pastAsks = coaching.asks.filter((ask) => ask.file === file && ask.line === lineRef.line);
+  const openStart = coaching.openAsk?.startLine ?? null;
+  const pastAsks = coaching.asks.filter((ask) => ask.file === file && ask.line === lineRef.line && (ask.startLine ?? null) === openStart);
   const comments = commentsAt(coaching, file, lineRef);
   const peek = coaching.openPeek?.file === file && isAtLine(coaching.openPeek, lineRef) ? coaching.openPeek : null;
   return (
     <>
       {peek ? (
-        <PeekReferences key={peek.word} route={coaching.route} word={peek.word} fromFile={file} fromLine={lineRef.line}
-          onClose={() => coaching.setOpenPeek(null)} onJump={(reference) => coaching.jumpToReference(reference.file, reference.line)} />
+        <PeekReferences key={`${peek.word}:${peek.column}`} route={coaching.route} query={peek}
+          onClose={() => coaching.setOpenPeek(null)} onJump={coaching.jumpToReference} />
       ) : null}
       {notes.map((note, noteIndex) => (
         <TeachingNote key={noteIndex} note={note} concept={coaching.conceptsByKey.get(note.conceptKey)} onSave={(status) => coaching.saveConcept(note, status)} />
@@ -87,8 +97,8 @@ function LineAnnotations({ file, notes, questions, lineRef, coaching }: {
           onChange={(body) => coaching.updateLineComment(comment.id, body)} onRemove={() => coaching.removeLineComment(comment.id)} />
       ))}
       {isAskOpen ? (
-        <LineBox route={coaching.route} file={file} lineRef={lineRef} pastAsks={pastAsks}
-          onAddComment={(body) => coaching.addLineComment(file, lineRef, body)} onClose={() => coaching.setOpenAsk(null)} />
+        <LineBox route={coaching.route} file={file} span={coaching.openAsk!} pastAsks={pastAsks}
+          onAddComment={(body) => coaching.addLineComment(file, coaching.openAsk!, body)} onClose={() => coaching.setOpenAsk(null)} />
       ) : null}
     </>
   );
@@ -111,7 +121,7 @@ function OutsideDiffItems({ stop, file, coaching }: { stop: TourStop; file: Diff
   const questions = stop.questions.filter(isOutside);
   if (notes.length === 0 && questions.length === 0) return null;
   return (
-    <div className="tour-why">
+    <div className="tour-outside">
       <div className="small muted">About lines outside the diff:</div>
       {notes.map((note, noteIndex) => (
         <TeachingNote key={noteIndex} note={note} concept={coaching.conceptsByKey.get(note.conceptKey)} onSave={(status) => coaching.saveConcept(note, status)} />
@@ -135,21 +145,46 @@ function ReviewedToggle({ file, coaching }: { file: DiffFile; coaching: Coaching
   );
 }
 
-function TourStopView({ stop, stopNumber, file, coaching }: { stop: TourStop; stopNumber: number; file: DiffFile | undefined; coaching: Coaching }) {
+function StopTitle({ path }: { path: string }) {
+  const slash = path.lastIndexOf("/");
+  return (
+    <span className="stop-title" title={path}>
+      <strong className="mono">{path.slice(slash + 1)}</strong>
+      <span className="stop-folder mono">{path.slice(0, Math.max(slash, 0))}</span>
+    </span>
+  );
+}
+
+function StopCounts({ stop }: { stop: TourStop }) {
+  const questionCount = stop.questions.length;
+  const noteCount = stop.notes.length;
+  return (
+    <span className="stop-counts small muted">
+      {questionCount > 0 ? <span title="Questions"><Icon name="question" size={13} /> {questionCount}</span> : null}
+      {noteCount > 0 ? <span title="Things to learn"><Icon name="bulb" size={13} /> {noteCount}</span> : null}
+    </span>
+  );
+}
+
+type TourStopProps = { stop: TourStop; stopNumber: number; file: DiffFile | undefined; coaching: Coaching; isUpdated: boolean };
+
+function TourStopView({ stop, stopNumber, file, coaching, isUpdated }: TourStopProps) {
   const isReviewed = file !== undefined && coaching.statusOf(file) === "reviewed";
   const isRevealed = coaching.isRevealed(stop.file);
   const isCollapsed = isReviewed && !isRevealed;
   return (
     <div className={`tour-stop ${isReviewed ? "is-reviewed" : ""}`} id={tourStopId(stop.file)}>
       <div className="tour-header">
-        <strong>Stop {stopNumber}</strong>
-        <span className="mono">{stop.file}</span>
-        {file?.tag === "important" ? <span className="chip important" title={file.tagReason}>Important: {file.tagReason}</span> : null}
+        <span className="stop-number">{stopNumber}</span>
+        <StopTitle path={stop.file} />
+        <StopCounts stop={stop} />
+        {isUpdated ? <span className="chip updated" title="Redone for the new commits">Updated</span> : null}
+        {file?.tag === "important" ? <span className="chip important" title={file.tagReason}>Important</span> : null}
         {file ? <ReviewedToggle file={file} coaching={coaching} /> : null}
         {isReviewed && isRevealed ? <button onClick={() => coaching.setRevealed(stop.file, false)}>Hide</button> : null}
       </div>
       {isCollapsed ? (
-        <div className="tour-why button-row" style={{ marginTop: 0, borderBottom: "1px solid var(--border)", borderRadius: "0 0 8px 8px" }}>
+        <div className="tour-collapsed">
           <span className="small muted">Reviewed. Hidden to save space.</span>
           <button onClick={() => coaching.setRevealed(stop.file, true)}>Show again</button>
         </div>
@@ -163,12 +198,12 @@ function TourStopView({ stop, stopNumber, file, coaching }: { stop: TourStop; st
 function TourStopBody({ stop, file, coaching }: { stop: TourStop; file: DiffFile | undefined; coaching: Coaching }) {
   return (
     <>
-      <div className="tour-why"><Markdown text={stop.whyItMatters} /></div>
+      {stop.whyItMatters ? <div className="tour-why"><Icon name="target" size={14} /><Markdown text={stop.whyItMatters} /></div> : null}
       <OutsideDiffItems stop={stop} file={file} coaching={coaching} />
       {file ? (
         <DiffView file={file} annotationsFor={(lineRef) => annotationsAt(stop, coaching, lineRef)}
-          onLineClick={(lineRef) => coaching.setOpenAsk({ file: stop.file, ...lineRef })}
-          onWordClick={(lineRef, word) => coaching.setOpenPeek({ file: stop.file, word, ...lineRef })} />
+          onLineClick={(span) => coaching.setOpenAsk({ file: stop.file, ...span })} selected={openSpanIn(coaching, stop.file)}
+          onWordClick={(lineRef, clicked) => coaching.setOpenPeek({ file: stop.file, ...clicked, ...lineRef })} />
       ) : (
         <div className="card muted small">This file is not in the diff.</div>
       )}
@@ -180,8 +215,8 @@ function SkimSection({ files, coaching }: { files: DiffFile[]; coaching: Coachin
   if (files.length === 0) return null;
   const emptyStop = (file: DiffFile): TourStop => ({ file: file.path, whyItMatters: "", notes: [], questions: [] });
   return (
-    <section>
-      <h2>Skim <span className="muted">({files.length})</span></h2>
+    <section id="skim">
+      <h2><Icon name="eye" /> Skim <span className="muted">({files.length})</span></h2>
       <p className="small muted">Tests, generated code, lockfiles, and renames. Open one only if you want to.</p>
       {files.map((file) => (
         <details key={file.path} className="card" id={tourStopId(file.path)}>
@@ -190,8 +225,8 @@ function SkimSection({ files, coaching }: { files: DiffFile[]; coaching: Coachin
             <ReviewedToggle file={file} coaching={coaching} />
           </summary>
           <DiffView file={file} annotationsFor={(lineRef) => annotationsAt(emptyStop(file), coaching, lineRef)}
-            onLineClick={(lineRef) => coaching.setOpenAsk({ file: file.path, ...lineRef })}
-            onWordClick={(lineRef, word) => coaching.setOpenPeek({ file: file.path, word, ...lineRef })} />
+            onLineClick={(span) => coaching.setOpenAsk({ file: file.path, ...span })} selected={openSpanIn(coaching, file.path)}
+            onWordClick={(lineRef, clicked) => coaching.setOpenPeek({ file: file.path, ...clicked, ...lineRef })} />
         </details>
       ))}
     </section>
@@ -206,12 +241,24 @@ function filesMissingFromTour(files: DiffFile[], tour: TourStop[]): DiffFile[] {
 
 type ReviewStateSetter = (update: (current: ReviewState) => ReviewState) => void;
 
-function lineCommentActions(setState: ReviewStateSetter) {
+/** Where a multi-line comment starts, with that line's code so it can follow it. */
+function rangeStartOf(files: DiffFile[], file: string, span: LineSpan): Partial<LineComment> {
+  if (span.startLine === undefined) return {};
+  const start = spanStart(span);
+  return { startLine: start.line, startSide: start.side, startLineText: lineTextFor(files, file, start.side, start.line) };
+}
+
+function lineCommentActions(setState: ReviewStateSetter, files: DiffFile[]) {
   const setComments = (update: (comments: LineComment[]) => LineComment[]) =>
     setState((current) => ({ ...current, lineComments: update(current.lineComments) }));
+  const newComment = (file: string, span: LineSpan, body: string): LineComment => ({
+    id: crypto.randomUUID(), file, line: span.line, side: span.side, body,
+    lineText: lineTextFor(files, file, span.side, span.line),
+    ...rangeStartOf(files, file, span),
+  });
   return {
-    addLineComment: (file: string, lineRef: LineRef, body: string) =>
-      setComments((comments) => [...comments, { id: crypto.randomUUID(), file, ...lineRef, body }]),
+    addLineComment: (file: string, span: LineSpan, body: string) =>
+      setComments((comments) => [...comments, newComment(file, span, body)]),
     updateLineComment: (commentId: string, body: string) =>
       setComments((comments) => comments.map((comment) => (comment.id === commentId ? { ...comment, body } : comment))),
     removeLineComment: (commentId: string) =>
@@ -230,17 +277,15 @@ function reviewedFileActions(state: ReviewState, setState: ReviewStateSetter) {
   return { statusOf, toggleReviewed };
 }
 
-function githubFileUrl(pr: PrPageData["pr"], file: string, line: number): string {
-  return `https://github.com/${pr.owner}/${pr.repo}/blob/${pr.headSha}/${file}#L${line}`;
-}
-
 /** Runs after React has drawn the latest state. */
 function afterRender(callback: () => void): void {
   requestAnimationFrame(() => requestAnimationFrame(callback));
 }
 
+type FileViewerControls = ReturnType<typeof useFileViewer>;
+
 /** Jumps open reviewed files first, since their code is hidden. */
-function useFileNavigation(page: PrPageData, closePeek: () => void) {
+function useFileNavigation(viewer: FileViewerControls, closePeek: () => void) {
   const [revealedFiles, setRevealedFiles] = useState<Set<string>>(new Set());
   const setRevealed = (filePath: string, isRevealed: boolean) =>
     setRevealedFiles((current) => {
@@ -253,72 +298,171 @@ function useFileNavigation(page: PrPageData, closePeek: () => void) {
     setRevealed(file, true);
     afterRender(() => {
       const landed = jumpToLine(file, line, side);
-      if (landed === "missing") window.open(githubFileUrl(page.pr, file, line), "_blank", "noreferrer");
+      if (landed !== "line" && side === "RIGHT") viewer.open({ file, line });
     });
   };
   const openFile = (file: string) => {
     setRevealed(file, true);
     afterRender(() => jumpToFile(file));
   };
-  const jumpToReference = (file: string, line: number) => {
+  const jumpToReference = (reference: Reference) => {
     closePeek();
-    openLine(file, line, "RIGHT");
+    if (reference.isInPage) openLine(reference.file, reference.line, "RIGHT");
+    else viewer.open({ file: reference.file, line: reference.line });
   };
   return { isRevealed: (filePath: string) => revealedFiles.has(filePath), setRevealed, openLine, openFile, jumpToReference };
 }
 
-function useCoaching(route: PrRoute, page: PrPageData, state: ReviewState, setState: ReviewStateSetter) {
+type ConceptSource = { conceptKey: string; title: string; explanation: string; jsExample: string };
+
+function hardIdeaAsConcept(idea: HardIdea): ConceptSource {
+  const explanation = [idea.oneLiner, idea.analogy && `Like: ${idea.analogy}`, `Term: ${idea.term}`].filter(Boolean).join("\n\n");
+  return { conceptKey: idea.conceptKey, title: idea.title, explanation, jsExample: idea.jsExample };
+}
+
+function useConcepts(page: PrPageData) {
+  const [concepts, setConcepts] = useState(page.concepts);
+  const replaceConcept = (saved: Concept) =>
+    setConcepts((current) => [...current.filter((existing) => existing.conceptKey !== saved.conceptKey), saved]);
+  const saveConcept = (source: ConceptSource, status: Concept["status"]) =>
+    void api.saveConcept({ ...source, status, seenIn: [page.pr.key] }).then(replaceConcept);
+  return { conceptsByKey: new Map(concepts.map((concept) => [concept.conceptKey, concept])), saveConcept };
+}
+
+function useCoaching(route: PrRoute, page: PrPageData, state: ReviewState, setState: ReviewStateSetter, viewer: FileViewerControls, files: DiffFile[]) {
   const [openAsk, setOpenAsk] = useState<OpenAsk | null>(null);
   const [openPeek, setOpenPeek] = useState<OpenPeek | null>(null);
-  const [concepts, setConcepts] = useState(page.concepts);
-  const saveConcept = (note: TeachingNoteData, status: Concept["status"]) => {
-    const concept = { conceptKey: note.conceptKey, title: note.title, status, explanation: note.explanation, jsExample: note.jsExample, seenIn: [page.pr.key] };
-    void api.saveConcept(concept).then((saved) => setConcepts((current) => [...current.filter((existing) => existing.conceptKey !== saved.conceptKey), saved]));
-  };
-  const conceptsByKey = new Map(concepts.map((concept) => [concept.conceptKey, concept]));
+  const { conceptsByKey, saveConcept } = useConcepts(page);
   const saveAnswer = (questionId: string, answer: QuestionAnswer) =>
     setState((current) => ({ ...current, answers: { ...current.answers, [questionId]: answer } }));
-  const navigation = useFileNavigation(page, () => setOpenPeek(null));
+  const navigation = useFileNavigation(viewer, () => setOpenPeek(null));
   return {
     route, asks: page.asks, conceptsByKey, answers: state.answers, openAsk, setOpenAsk, openPeek, setOpenPeek, saveAnswer, saveConcept,
-    lineComments: state.lineComments, ...lineCommentActions(setState), ...reviewedFileActions(state, setState), ...navigation,
+    lineComments: placeLineComments(state.lineComments, files), ...lineCommentActions(setState, files), ...reviewedFileActions(state, setState), ...navigation,
   } satisfies Coaching & typeof navigation;
 }
 
 function LayoutToggle() {
   const layout = useDiffLayout();
   return (
-    <div className="button-row" style={{ alignItems: "center" }}>
-      <span className="small muted">Diff:</span>
-      <button className={layout === "split" ? "primary" : ""} onClick={() => setDiffLayout("split")}>Side by side</button>
-      <button className={layout === "unified" ? "primary" : ""} onClick={() => setDiffLayout("unified")}>Unified</button>
+    <div className="segmented" role="group" aria-label="Diff layout">
+      <button className={layout === "split" ? "active" : ""} onClick={() => setDiffLayout("split")}>Side by side</button>
+      <button className={layout === "unified" ? "active" : ""} onClick={() => setDiffLayout("unified")}>Unified</button>
     </div>
   );
 }
 
-export function WalkthroughReview({ route, page, onReload }: { route: PrRoute; page: PrPageData; onReload: () => void }) {
-  const data = page.job!.data as WalkthroughData;
-  const [state, setState] = useSavedState<ReviewState>(route, page.reviewState, DEFAULT_REVIEW_STATE);
-  const coaching = useCoaching(route, page, state, setState);
+function stopsOf(data: WalkthroughData): TourStop[] {
+  const notCovered = (file: DiffFile): TourStop => ({ file: file.path, whyItMatters: "Not covered by the walkthrough.", notes: [], questions: [] });
+  return [...data.walkthrough.tour, ...filesMissingFromTour(data.files, data.walkthrough.tour).map(notCovered)];
+}
+
+type PageMapProps = { data: WalkthroughData; stops: TourStop[]; coaching: Coaching & { openFile: (file: string) => void }; hasFinish: boolean };
+
+function MapLink({ target, label, activeId }: { target: string; label: string; activeId: string | undefined }) {
+  const jump = (event: React.MouseEvent) => {
+    event.preventDefault();
+    jumpToSection(target);
+  };
+  return <a href={`#${target}`} onClick={jump} className={target === activeId ? "is-active" : ""}>{label}</a>;
+}
+
+function baseName(filePath: string): string {
+  return filePath.split("/").at(-1) ?? filePath;
+}
+
+/** Adds the parent folder when two stops share a file name. */
+function shortNames(paths: string[]): Map<string, string> {
+  const isShared = (name: string) => paths.filter((other) => baseName(other) === name).length > 1;
+  const withParent = (filePath: string) => filePath.split("/").slice(-2).join("/");
+  return new Map(paths.map((filePath) => [filePath, isShared(baseName(filePath)) ? withParent(filePath) : baseName(filePath)]));
+}
+
+function openQuestionCount(stop: TourStop, answers: ReviewState["answers"]): number {
+  return stop.questions.filter((question) => !answers[question.id]?.decision).length;
+}
+
+function MapStop({ stop, stopNumber, name, file, coaching, isActive }: {
+  stop: TourStop; stopNumber: number; name: string; file: DiffFile | undefined; coaching: PageMapProps["coaching"]; isActive: boolean;
+}) {
+  const isReviewed = file !== undefined && coaching.statusOf(file) === "reviewed";
+  const openQuestions = openQuestionCount(stop, coaching.answers);
+  return (
+    <button className={`map-stop ${isReviewed ? "is-reviewed" : ""} ${isActive ? "is-active" : ""}`} onClick={() => coaching.openFile(stop.file)} title={stop.file}>
+      <span className="map-stop-number">{isReviewed ? <Icon name="check" size={12} /> : stopNumber}</span>
+      <span className="map-stop-name">{name}</span>
+      {openQuestions > 0 ? <span className="map-badge" title="Questions left">{openQuestions}</span> : null}
+    </button>
+  );
+}
+
+const SECTION_IDS = ["glance", "picture", "ideas", "guide", "flow", "removed"];
+
+/** The sticky map on the left: sections, then every tour stop. */
+function PageMap({ data, stops, coaching, hasFinish }: PageMapProps) {
   const fileByPath = new Map(data.files.map((file) => [file.path, file]));
-  const extraStops = filesMissingFromTour(data.files, data.walkthrough.tour).map((file) => ({ file: file.path, whyItMatters: "Not covered by the walkthrough.", notes: [], questions: [] }));
-  const stops = [...data.walkthrough.tour, ...extraStops];
+  const walkthrough = data.walkthrough;
+  const nameOf = shortNames(stops.map((stop) => stop.file));
+  const activeId = useActiveAnchor([...SECTION_IDS, ...stops.map((stop) => tourStopId(stop.file)), "skim", "finish"]);
+  return (
+    <nav className="page-map" aria-label="On this page">
+      <div className="map-heading">On this page</div>
+      <MapLink target="glance" label="At a glance" activeId={activeId} />
+      {walkthrough.picture?.diagram ? <MapLink target="picture" label="The big picture" activeId={activeId} /> : null}
+      {walkthrough.hardIdeas?.length ? <MapLink target="ideas" label="Hard ideas" activeId={activeId} /> : null}
+      <MapLink target="guide" label="Guide" activeId={activeId} />
+      {walkthrough.flow.length ? <MapLink target="flow" label="How it runs" activeId={activeId} /> : null}
+      {data.removed.length ? <MapLink target="removed" label="What got removed" activeId={activeId} /> : null}
+      <div className="map-heading">Tour</div>
+      {stops.map((stop, stopIndex) => (
+        <MapStop key={stop.file} stop={stop} stopNumber={stopIndex + 1} name={nameOf.get(stop.file) ?? stop.file}
+          file={fileByPath.get(stop.file)} coaching={coaching} isActive={activeId === tourStopId(stop.file)} />
+      ))}
+      {skimFiles(data.files).length ? <MapLink target="skim" label="Skim files" activeId={activeId} /> : null}
+      {hasFinish ? <MapLink target="finish" label="Finish" activeId={activeId} /> : null}
+    </nav>
+  );
+}
+
+export function WalkthroughReview({ route, page, onReload }: { route: PrRoute; page: PrPageData; onReload: () => void }) {
+  const data = page.walkthrough!.data as WalkthroughData;
+  const isSomeoneElsesPr = page.pr.kind === "review";
+  const [state, setState] = useSavedState<ReviewState>(route, page.reviewState, DEFAULT_REVIEW_STATE);
+  const viewer = useFileViewer();
+  const coaching = useCoaching(route, page, state, setState, viewer, data.files);
+  const fileByPath = new Map(data.files.map((file) => [file.path, file]));
+  const stops = stopsOf(data);
+  const saveHardIdea = (idea: HardIdea, status: Concept["status"]) => coaching.saveConcept(hardIdeaAsConcept(idea), status);
+  const latestChange = data.changes?.at(-1);
+  const updatedFiles = new Set(latestChange?.files ?? []);
 
   return (
-    <>
-      <p className="small muted">Click any line number to ask about that line or comment on it. Ctrl+click a name to see everywhere it is used.</p>
-      <StorySection story={data.walkthrough.story} />
-      <GuideSection guideJob={page.guide} files={data.files} statusOf={coaching.statusOf} toggleReviewed={coaching.toggleReviewed}
-        onOpenFile={coaching.openFile} onPrepare={() => void api.prepareGuide(route).then(onReload)} />
-      <FlowSection flow={data.walkthrough.flow} onOpenLine={coaching.openLine} />
-      <RemovedCodeSection removed={data.removed} />
-      <h2>Guided tour</h2>
-      <LayoutToggle />
-      {stops.map((stop, stopIndex) => (
-        <TourStopView key={stop.file} stop={stop} stopNumber={stopIndex + 1} file={fileByPath.get(stop.file)} coaching={coaching} />
-      ))}
-      <SkimSection files={skimFiles(data.files)} coaching={coaching} />
-      <FinishPanel route={route} walkthrough={data.walkthrough} state={state} setState={setState} />
-    </>
+    <div className="review-layout">
+      <PageMap data={data} stops={stops} coaching={coaching} hasFinish={isSomeoneElsesPr} />
+      <div className="review-main">
+        <ChangesBanner change={latestChange} onOpenFile={coaching.openFile} />
+        <AtAGlance story={data.walkthrough.story} />
+        <PictureSection picture={data.walkthrough.picture} />
+        <HardIdeasSection ideas={data.walkthrough.hardIdeas} conceptsByKey={coaching.conceptsByKey} onSave={saveHardIdea} onOpenLine={coaching.openLine} />
+        <GuideSection guideJob={page.guide} files={data.files} statusOf={coaching.statusOf} toggleReviewed={coaching.toggleReviewed}
+          onOpenFile={coaching.openFile} onPrepare={() => void api.prepareGuide(route).then(onReload)} />
+        <FlowSection route={route} flow={data.walkthrough.flow} files={data.files} onOpenLine={coaching.openLine} />
+        <RemovedCodeSection removed={data.removed} />
+        <section id="tour">
+          <div className="section-bar">
+            <h2><Icon name="code" /> Guided tour</h2>
+            <LayoutToggle />
+          </div>
+          <p className="hint small"><Icon name="target" size={13} /> Click a line number to ask or comment. Ctrl+click a name to see where that exact thing is used.</p>
+          {stops.map((stop, stopIndex) => (
+            <TourStopView key={stop.file} stop={stop} stopNumber={stopIndex + 1} file={fileByPath.get(stop.file)} coaching={coaching}
+              isUpdated={updatedFiles.has(stop.file)} />
+          ))}
+        </section>
+        <SkimSection files={skimFiles(data.files)} coaching={coaching} />
+        {isSomeoneElsesPr ? <FinishPanel route={route} walkthrough={data.walkthrough} state={state} setState={setState} lineComments={coaching.lineComments} /> : null}
+      </div>
+      <FileViewer route={route} viewer={viewer} />
+    </div>
   );
 }

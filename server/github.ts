@@ -9,7 +9,7 @@ const PULL_REQUEST_QUERY = `
 query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
-      title body url state updatedAt additions deletions
+      title body url state isDraft updatedAt additions deletions
       headRefOid baseRefOid baseRefName author { login }
       reviewThreads(first: 100) {
         nodes {
@@ -73,6 +73,7 @@ type RawPullRequest = {
   body: string;
   url: string;
   state: "OPEN" | "CLOSED" | "MERGED";
+  isDraft: boolean;
   updatedAt: string;
   additions: number;
   deletions: number;
@@ -126,6 +127,7 @@ export async function fetchPullRequest(ref: PrRef, kind: PrKind): Promise<PullRe
     key: prKeyOf(ref.owner, ref.repo, ref.number),
     ...ref,
     kind,
+    isDraft: raw.isDraft,
     title: raw.title,
     body: raw.body,
     author: raw.author?.login ?? "ghost",
@@ -146,7 +148,15 @@ export async function fetchPrState(ref: PrRef): Promise<RawPullRequest["state"]>
 
 export type ReviewEvent = "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
 
-export type ReviewCommentInput = { path: string; line: number; side: "LEFT" | "RIGHT"; body: string };
+// - start_line and start_side make it a comment on several lines.
+export type ReviewCommentInput = {
+  path: string;
+  line: number;
+  side: "LEFT" | "RIGHT";
+  body: string;
+  start_line?: number;
+  start_side?: "LEFT" | "RIGHT";
+};
 
 export type ReviewInput = { event: ReviewEvent; body: string; comments: ReviewCommentInput[]; commitSha: string };
 

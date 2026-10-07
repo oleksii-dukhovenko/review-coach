@@ -2,7 +2,8 @@ import { useState } from "react";
 
 import { api, type PrRoute, type ReviewCommentInput, type ReviewEvent, type Walkthrough } from "../api.ts";
 import type { CoachingQuestionData } from "../components/Coaching.tsx";
-import type { LineComment, ReviewState } from "../savedState.ts";
+import type { PlacedComment } from "../placeComments.ts";
+import type { ReviewState } from "../savedState.ts";
 
 type ConfirmedProblem = { file: string; question: CoachingQuestionData; draft: string };
 
@@ -11,6 +12,8 @@ type FinishPanelProps = {
   walkthrough: Walkthrough;
   state: ReviewState;
   setState: (update: (current: ReviewState) => ReviewState) => void;
+  // - Your line comments, moved to where their code is now.
+  lineComments: PlacedComment[];
 };
 
 const VERDICT_LABEL: Record<ReviewEvent, string> = {
@@ -33,20 +36,40 @@ function suggestVerdict(problemCount: number): { verdict: ReviewEvent; reason: s
   return { verdict: "REQUEST_CHANGES", reason: `You confirmed ${problemCount} ${plural}.` };
 }
 
+function rangeStart(startLine: number | undefined, line: number, side: "LEFT" | "RIGHT"): Partial<ReviewCommentInput> {
+  const isRange = startLine !== undefined && startLine < line;
+  return isRange ? { start_line: startLine, start_side: side } : {};
+}
+
+/** A question about several lines becomes a comment on those lines. */
 function toReviewComment(problem: ConfirmedProblem): ReviewCommentInput {
-  return { path: problem.file, line: problem.question.line, side: problem.question.side, body: problem.draft };
+  const { question } = problem;
+  const lastLine = Math.max(question.endLine ?? question.line, question.line);
+  return { path: problem.file, line: lastLine, side: question.side, body: problem.draft, ...rangeStart(question.line, lastLine, question.side) };
 }
 
-function lineCommentToReviewComment(comment: LineComment): ReviewCommentInput {
-  return { path: comment.file, line: comment.line, side: comment.side, body: comment.body };
+function lineCommentToReviewComment(comment: PlacedComment): ReviewCommentInput {
+  const start = comment.startLine === undefined ? {} : { start_line: comment.startLine, start_side: comment.startSide ?? comment.side };
+  return { path: comment.file, line: comment.line, side: comment.side, body: comment.body, ...start };
 }
 
-function allReviewComments(problems: ConfirmedProblem[], lineComments: LineComment[]): ReviewCommentInput[] {
-  const writtenComments = lineComments.filter((comment) => comment.body.trim());
-  return [...problems.map(toReviewComment), ...writtenComments.map(lineCommentToReviewComment)];
+function isWritten(comment: PlacedComment): boolean {
+  return comment.body.trim() !== "";
 }
 
-function OwnLineComment({ comment, setState }: { comment: LineComment; setState: FinishPanelProps["setState"] }) {
+function allReviewComments(problems: ConfirmedProblem[], lineComments: PlacedComment[]): ReviewCommentInput[] {
+  const anchoredComments = lineComments.filter((comment) => isWritten(comment) && !comment.isOutdated);
+  return [...problems.map(toReviewComment), ...anchoredComments.map(lineCommentToReviewComment)];
+}
+
+/** Comments whose code changed go in the summary, since their line is gone. */
+function summaryWithOutdated(summary: string, lineComments: PlacedComment[]): string {
+  const outdated = lineComments.filter((comment) => isWritten(comment) && comment.isOutdated);
+  const bullets = outdated.map((comment) => `- \`${comment.file}\`: ${comment.body.replace(/\n/g, " ")}`);
+  return [summary, ...bullets].join("\n").trim();
+}
+
+function OwnLineComment({ comment, setState }: { comment: PlacedComment; setState: FinishPanelProps["setState"] }) {
   const updateBody = (body: string) => setState((current) => ({
     ...current,
     lineComments: current.lineComments.map((existing) => (existing.id === comment.id ? { ...existing, body } : existing)),
@@ -57,7 +80,10 @@ function OwnLineComment({ comment, setState }: { comment: LineComment; setState:
   }));
   return (
     <div className="draft">
-      <div className="mono small">{comment.file}:{comment.line} <span className="muted">(your comment)</span></div>
+      <div className="mono small">
+        {comment.file}{comment.isOutdated ? "" : `:${comment.startLine !== undefined ? `${comment.startLine}-` : ""}${comment.line}`} <span className="muted">(your comment)</span>
+        {comment.isOutdated ? <span className="chip unsure" style={{ marginLeft: 6 }}>Its code changed: goes in the summary</span> : null}
+      </div>
       <textarea value={comment.body} onChange={(event) => updateBody(event.target.value)} />
       <div className="button-row"><button onClick={remove}>Remove</button></div>
     </div>
@@ -70,11 +96,11 @@ function countDecided(walkthrough: Walkthrough, state: ReviewState): { decided: 
   return { decided, total: questions.length };
 }
 
-export function FinishPanel({ route, walkthrough, state, setState }: FinishPanelProps) {
+export function FinishPanel({ route, walkthrough, state, setState, lineComments }: FinishPanelProps) {
   const [isPosting, setIsPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const problems = confirmedProblems(walkthrough, state);
-  const comments = allReviewComments(problems, state.lineComments);
+  const comments = allReviewComments(problems, lineComments);
   const suggestion = suggestVerdict(problems.length);
   const verdict = state.verdict ?? suggestion.verdict;
   const progress = countDecided(walkthrough, state);
@@ -88,7 +114,7 @@ export function FinishPanel({ route, walkthrough, state, setState }: FinishPanel
     setIsPosting(true);
     setError(null);
     try {
-      const { url } = await api.submitReview(route, { event: verdict, body: state.summary, comments });
+      const { url } = await api.submitReview(route, { event: verdict, body: summaryWithOutdated(state.summary, lineComments), comments });
       setState((current) => ({ ...current, postedUrl: url }));
     } catch (postError) {
       setError(postError instanceof Error ? postError.message : String(postError));
@@ -98,19 +124,19 @@ export function FinishPanel({ route, walkthrough, state, setState }: FinishPanel
   }
 
   return (
-    <section>
+    <section id="finish">
       <h2>Finish</h2>
       <div className="card finish">
         <div className="small muted">You decided {progress.decided} of {progress.total} questions.</div>
-        <h3 style={{ marginTop: 10 }}>Your comments ({problems.length + state.lineComments.length})</h3>
+        <h3 style={{ marginTop: 10 }}>Your comments ({problems.length + lineComments.length})</h3>
         {comments.length === 0 ? <div className="small muted">Mark a question as "Problem", or click a line number and pick "Comment on the PR".</div> : null}
         {problems.map((problem) => (
           <div key={problem.question.id} className="draft">
-            <div className="mono small">{problem.file}:{problem.question.line}</div>
+            <div className="mono small">{problem.file}:{problem.question.line}{problem.question.endLine > problem.question.line ? `-${problem.question.endLine}` : ""}</div>
             <textarea value={problem.draft} onChange={(event) => updateDraft(problem.question.id, event.target.value)} />
           </div>
         ))}
-        {state.lineComments.map((comment) => <OwnLineComment key={comment.id} comment={comment} setState={setState} />)}
+        {lineComments.map((comment) => <OwnLineComment key={comment.id} comment={comment} setState={setState} />)}
         <h3 style={{ marginTop: 14 }}>Summary (optional)</h3>
         <textarea value={state.summary} onChange={(event) => setState((current) => ({ ...current, summary: event.target.value }))} />
         <h3 style={{ marginTop: 14 }}>Verdict</h3>

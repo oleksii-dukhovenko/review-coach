@@ -3,34 +3,38 @@ import { streamSSE } from "hono/streaming";
 
 import { answerQuestion, type Question } from "./ask.ts";
 import { listConcepts, saveConcept, type Concept } from "./concepts.ts";
-import { getJob, getPr, getReviewState, getSetting, listAsks, listInboxPrs, saveReviewState, type JobRecord } from "./db.ts";
-import { refreshAndRecord } from "./inbox.ts";
+import { getJob, getPr, getReviewState, getSetting, listAsks, listInboxPrs, saveReviewState } from "./db.ts";
+import { isAutoUpdateOn, refreshAndRecord, setAutoUpdate } from "./inbox.ts";
+import { combinedStatus, isOutOfDate, mainJobKinds, needsPreparing, type MainJobKind } from "./jobKinds.ts";
 import { replyToThread, submitReview, type ReviewSubmission } from "./posting.ts";
 import { enqueue, isPaused, resumeQueue } from "./queue.ts";
-import { findReferences, isIdentifier, readSnippet } from "./references.ts";
+import { findReferences, isIdentifier, readFileView, readSnippet, warmUpForPr, type ReferenceQuery } from "./references.ts";
 import { prKeyOf, type PullRequest } from "./types.ts";
-import { threadsFingerprint } from "./walkthrough.ts";
 
-function jobKindFor(pr: PullRequest) {
-  return pr.kind === "review" ? "walkthrough" : "triage";
-}
-
-function currentBuildTarget(pr: PullRequest): string {
-  return pr.kind === "review" ? pr.headSha : threadsFingerprint(pr);
-}
-
-function isOutOfDate(pr: PullRequest, job: JobRecord | undefined): boolean {
-  return job?.status === "ready" && job.builtFor !== currentBuildTarget(pr);
+function mainJobs(pr: PullRequest) {
+  return mainJobKinds(pr).map((kind) => ({ kind, job: getJob(pr.key, kind) }));
 }
 
 function inboxRow(pr: PullRequest) {
-  const job = getJob(pr.key, jobKindFor(pr));
+  const jobs = mainJobs(pr);
+  const failedJob = jobs.find(({ job }) => job?.status === "failed")?.job;
   return {
-    key: pr.key, owner: pr.owner, repo: pr.repo, number: pr.number, kind: pr.kind,
+    key: pr.key, owner: pr.owner, repo: pr.repo, number: pr.number, kind: pr.kind, isDraft: pr.isDraft,
     title: pr.title, author: pr.author, url: pr.url, additions: pr.additions, deletions: pr.deletions,
-    updatedAt: pr.updatedAt, openThreadCount: pr.openThreads.length,
-    status: job?.status ?? "none", error: job?.error ?? null, isOutOfDate: isOutOfDate(pr, job),
+    updatedAt: pr.updatedAt, openThreadCount: pr.openThreads.length, autoUpdate: isAutoUpdateOn(pr.key),
+    status: combinedStatus(jobs.map(({ job }) => job?.status ?? "none")),
+    error: failedJob?.error ?? null,
+    isOutOfDate: jobs.some(({ kind, job }) => isOutOfDate(pr, kind, job)),
   };
+}
+
+function isKindOutOfDate(pr: PullRequest, kind: MainJobKind): boolean {
+  return isOutOfDate(pr, kind, getJob(pr.key, kind));
+}
+
+/** Saves only the keys sent, so each page section keeps its own. */
+function mergeReviewState(prKey: string, changes: object): void {
+  saveReviewState(prKey, { ...(getReviewState(prKey) as object), ...changes });
 }
 
 function prKeyFromParams(context: Context): string {
@@ -41,6 +45,16 @@ function requirePr(context: Context): PullRequest {
   const pr = getPr(prKeyFromParams(context));
   if (!pr) throw new Error("PR not found in the inbox");
   return pr;
+}
+
+function referenceQueryFrom(context: Context): ReferenceQuery {
+  return {
+    word: context.req.query("word") ?? "",
+    file: context.req.query("file") ?? "",
+    line: Number(context.req.query("line")),
+    column: Number(context.req.query("column")),
+    side: context.req.query("side") === "LEFT" ? "LEFT" : "RIGHT",
+  };
 }
 
 function errorMessage(error: unknown): string {
@@ -76,17 +90,32 @@ export function buildRoutes(): Hono {
 
   api.get(prPath, (context) => {
     const pr = requirePr(context);
-    const job = getJob(pr.key, jobKindFor(pr));
+    warmUpForPr(pr);
     return context.json({
-      pr, job: job ?? null, guide: getJob(pr.key, "guide") ?? null, isOutOfDate: isOutOfDate(pr, job),
+      pr,
+      jobKinds: mainJobKinds(pr),
+      walkthrough: getJob(pr.key, "walkthrough") ?? null,
+      triage: getJob(pr.key, "triage") ?? null,
+      guide: getJob(pr.key, "guide") ?? null,
+      outOfDate: { walkthrough: isKindOutOfDate(pr, "walkthrough"), triage: isKindOutOfDate(pr, "triage") },
+      autoUpdate: isAutoUpdateOn(pr.key),
       reviewState: getReviewState(pr.key), asks: listAsks(pr.key), concepts: listConcepts(),
     });
   });
 
   api.post(`${prPath}/prepare`, (context) => {
     const pr = requirePr(context);
-    enqueue({ prKey: pr.key, kind: jobKindFor(pr) });
+    const isForced = context.req.query("force") === "1";
+    const jobsToBuild = mainJobs(pr).filter(({ kind, job }) => isForced || needsPreparing(pr, kind, job));
+    jobsToBuild.forEach(({ kind }) => enqueue({ prKey: pr.key, kind, isFullRebuild: isForced }));
     return context.json({ ok: true });
+  });
+
+  api.put(`${prPath}/auto-update`, async (context) => {
+    const pr = requirePr(context);
+    const { isOn } = (await context.req.json()) as { isOn: boolean };
+    setAutoUpdate(pr.key, isOn === true);
+    return context.json({ isOn: isAutoUpdateOn(pr.key) });
   });
 
   api.post(`${prPath}/prepare-guide`, (context) => {
@@ -95,7 +124,7 @@ export function buildRoutes(): Hono {
   });
 
   api.put(`${prPath}/state`, async (context) => {
-    saveReviewState(requirePr(context).key, await context.req.json());
+    mergeReviewState(requirePr(context).key, await context.req.json());
     return context.json({ ok: true });
   });
 
@@ -124,9 +153,13 @@ export function buildRoutes(): Hono {
   });
 
   api.get(`${prPath}/references`, async (context) => {
-    const word = context.req.query("word") ?? "";
-    if (!isIdentifier(word)) return context.json({ error: "Not a name" }, 400);
-    return context.json(await findReferences(requirePr(context), word, context.req.query("file") ?? ""));
+    const query = referenceQueryFrom(context);
+    if (!isIdentifier(query.word)) return context.json({ error: "Not a name" }, 400);
+    return context.json(await findReferences(requirePr(context), query));
+  });
+
+  api.get(`${prPath}/file`, async (context) => {
+    return context.json(await readFileView(requirePr(context), context.req.query("file") ?? ""));
   });
 
   api.get(`${prPath}/snippet`, async (context) => {

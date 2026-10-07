@@ -1,11 +1,12 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { DiffFile, DiffHunk, DiffLine } from "../api.ts";
+import { linesInSpan, spanBetween, type LinePoint, type LineSpan } from "../../../server/anchors.ts";
 import { useDiffLayout } from "./diffLayout.ts";
 import { commentFlags } from "./commentLines.ts";
 import { languageForFile, renderCodeLine } from "./highlight.ts";
 import { toSplitRows, type SplitRow } from "./splitRows.ts";
-import { wordAtClick } from "./wordAtPoint.ts";
+import { wordAtClick, type ClickedWord } from "./wordAtPoint.ts";
 
 export type LineRef = { line: number; side: "LEFT" | "RIGHT" };
 
@@ -13,11 +14,21 @@ type DiffViewProps = {
   file: DiffFile;
   // - Extra rows to show under a line, or null.
   annotationsFor: (lineRef: LineRef) => ReactNode;
-  onLineClick: (lineRef: LineRef) => void;
-  onWordClick: (lineRef: LineRef, word: string) => void;
+  // - One line, or a range picked by dragging or Shift+click.
+  onLineClick: (span: LineSpan) => void;
+  onWordClick: (lineRef: LineRef, clicked: ClickedWord) => void;
+  // - Lines to keep highlighted, such as the open question box's range.
+  selected?: LineSpan;
 };
 
-type LineHandlers = Pick<DiffViewProps, "onLineClick" | "onWordClick"> & {
+type LinePicking = {
+  startPick: (point: LinePoint, isExtending: boolean) => void;
+  extendPick: (point: LinePoint) => void;
+  pickedLines: Set<DiffLine>;
+};
+
+type LineHandlers = Pick<DiffViewProps, "onWordClick"> & {
+  picking: LinePicking;
   language?: string;
   filePath: string;
   commentLines?: Set<DiffLine>;
@@ -26,19 +37,28 @@ type LineHandlers = Pick<DiffViewProps, "onLineClick" | "onWordClick"> & {
 const MARKER = { add: "+", del: "-", ctx: " " } as const;
 
 /** Deleted lines use old numbers; everything else uses new ones. */
+export function isPeekClick(event: React.MouseEvent): boolean {
+  return event.ctrlKey || event.metaKey;
+}
+
 export function lineRefOf(diffLine: DiffLine): LineRef {
   return diffLine.kind === "del" ? { line: diffLine.oldLine!, side: "LEFT" } : { line: diffLine.newLine!, side: "RIGHT" };
 }
 
-function isPeekClick(event: React.MouseEvent): boolean {
-  return event.ctrlKey || event.metaKey;
-}
-
 type LineNumberProps = { number: number | null; diffLine: DiffLine; handlers: LineHandlers; className?: string };
 
+function pickedClass(diffLine: DiffLine, handlers: LineHandlers): string {
+  return handlers.picking.pickedLines.has(diffLine) ? " is-picked" : "";
+}
+
 function LineNumberCell({ number, diffLine, handlers, className = "line-number" }: LineNumberProps) {
+  const startPick = (event: React.MouseEvent) => {
+    event.preventDefault();
+    handlers.picking.startPick(lineRefOf(diffLine), event.shiftKey);
+  };
   return (
-    <td className={className} onClick={() => handlers.onLineClick(lineRefOf(diffLine))} title="Ask or comment on this line">
+    <td className={className + pickedClass(diffLine, handlers)} onMouseDown={startPick} onMouseEnter={() => handlers.picking.extendPick(lineRefOf(diffLine))}
+      title="Ask or comment on this line. Drag, or Shift+click, to pick several lines.">
       {number ?? ""}
     </td>
   );
@@ -47,12 +67,12 @@ function LineNumberCell({ number, diffLine, handlers, className = "line-number" 
 function CodeCell({ diffLine, handlers, className = "code" }: { diffLine: DiffLine; handlers: LineHandlers; className?: string }) {
   const peekWord = (event: React.MouseEvent<HTMLElement>) => {
     if (!isPeekClick(event)) return;
-    const word = wordAtClick(event, diffLine.text);
-    if (word) handlers.onWordClick(lineRefOf(diffLine), word);
+    const clicked = wordAtClick(event, diffLine.text);
+    if (clicked) handlers.onWordClick(lineRefOf(diffLine), clicked);
   };
   const lineRef = lineRefOf(diffLine);
   return (
-    <td className={className} onClick={peekWord} data-file={handlers.filePath} data-line={lineRef.line} data-side={lineRef.side}
+    <td className={className + pickedClass(diffLine, handlers)} onClick={peekWord} data-file={handlers.filePath} data-line={lineRef.line} data-side={lineRef.side}
       dangerouslySetInnerHTML={{ __html: renderCodeLine(diffLine.text, handlers.language, handlers.commentLines?.has(diffLine) ?? false) || " " }} />
   );
 }
@@ -155,10 +175,34 @@ function ColumnWidths({ isSplit }: { isSplit: boolean }) {
   return <colgroup><col style={{ width: 52 }} /><col style={{ width: 52 }} /><col style={{ width: 16 }} /><col /></colgroup>;
 }
 
+/** Picks lines by dragging over line numbers, or by Shift+click from the last pick. */
+function useLinePicking(file: DiffFile, onPicked: (span: LineSpan) => void, selected: LineSpan | undefined): LinePicking {
+  const [dragging, setDragging] = useState<{ from: LinePoint; to: LinePoint } | null>(null);
+  const lastPick = useRef<LinePoint | null>(null);
+  useEffect(() => {
+    if (!dragging) return;
+    const finishDrag = () => {
+      setDragging(null);
+      onPicked(spanBetween(file, dragging.from, dragging.to));
+    };
+    window.addEventListener("mouseup", finishDrag);
+    return () => window.removeEventListener("mouseup", finishDrag);
+  }, [dragging]);
+  const startPick = (point: LinePoint, isExtending: boolean) => {
+    if (isExtending && lastPick.current) return onPicked(spanBetween(file, lastPick.current, point));
+    lastPick.current = point;
+    setDragging({ from: point, to: point });
+  };
+  const extendPick = (point: LinePoint) => setDragging((current) => (current ? { ...current, to: point } : null));
+  const shownSpan = dragging ? spanBetween(file, dragging.from, dragging.to) : selected;
+  return { startPick, extendPick, pickedLines: new Set(shownSpan ? linesInSpan(file, shownSpan) : []) };
+}
+
 export function DiffView(props: DiffViewProps) {
   const layout = useDiffLayout();
+  const picking = useLinePicking(props.file, props.onLineClick, props.selected);
   const handlers: LineHandlers = {
-    onLineClick: props.onLineClick, onWordClick: props.onWordClick, language: languageForFile(props.file.path), filePath: props.file.path,
+    picking, onWordClick: props.onWordClick, language: languageForFile(props.file.path), filePath: props.file.path,
   };
   if (props.file.isBinary) return <div className="card muted">Binary file, not shown.</div>;
   const isSplit = layout === "split";

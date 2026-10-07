@@ -3,6 +3,7 @@ import { useState } from "react";
 import { api, type PrPageData, type PrRoute, type PullRequest, type Triage, type TriageData } from "../api.ts";
 import { AskBox } from "../components/AskBox.tsx";
 import { CopyButton, Markdown, PatchBlock, ProofBadge } from "../components/basics.tsx";
+import { Icon } from "../components/Icon.tsx";
 import { useSavedState, type MyPrState, type ReplyState } from "../savedState.ts";
 
 type Thread = PullRequest["openThreads"][number];
@@ -83,22 +84,23 @@ function ThreadCard({ route, page, thread, verdict, reply, onReplyChange }: Thre
   const draftReply = reply.draft || verdict?.draftReply || "";
   const pastAsks = page.asks.filter((ask) => ask.file === thread.path && ask.line === thread.line);
   return (
-    <div className="card">
-      <div className="button-row" style={{ marginTop: 0, alignItems: "center" }}>
-        <span className="mono small">{location}</span>
-        <span className="small muted">from {thread.comments[0]?.author}</span>
+    <div className={`card thread-card ${verdict ? `verdict-${verdict.verdict}` : ""}`}>
+      <div className="thread-top">
         {verdict ? <span className={`chip ${verdict.verdict}`}>{VERDICT_LABEL[verdict.verdict]}</span> : <span className="chip">New since prepared</span>}
+        <span className="mono small" title={location}>{location.split("/").at(-1)}</span>
+        <span className="small muted">from {thread.comments[0]?.author}</span>
         {verdict ? <ProofBadge proof={verdict.proof} /> : null}
       </div>
-      <ReviewerComments thread={thread} />
+      {verdict ? null : <ReviewerComments thread={thread} />}
       {verdict ? (
         <>
-          <h3 style={{ marginTop: 10 }}>What they mean</h3>
-          <Markdown text={verdict.meaning} />
-          <h3>{verdict.verdict === "valid" ? "Why it's valid" : "Why"}</h3>
-          <Markdown text={verdict.why} />
-          <h3>Example</h3>
-          <Markdown text={verdict.example} />
+          <div className="thread-meaning"><Markdown text={verdict.meaning} /></div>
+          <div className="thread-why"><span className="small muted">{verdict.verdict === "valid" ? "Why it's valid:" : "Why:"}</span> <Markdown text={verdict.why} /></div>
+          <details className="more">
+            <summary>Example</summary>
+            <Markdown text={verdict.example} />
+          </details>
+          <ReviewerComments thread={thread} />
           {verdict.proposedFix ? <ProposedFix patch={verdict.proposedFix} /> : null}
           {verdict.verdict !== "valid" ? <ReplyEditor route={route} thread={thread} reply={{ ...reply, draft: draftReply }} onChange={onReplyChange} /> : null}
         </>
@@ -107,27 +109,55 @@ function ThreadCard({ route, page, thread, verdict, reply, onReplyChange }: Thre
         {thread.line ? <button onClick={() => setIsAskOpen(!isAskOpen)}>{isAskOpen ? "Hide questions" : "Ask about this"}</button> : null}
       </div>
       {isAskOpen && thread.line ? (
-        <AskBox route={route} file={thread.path} line={thread.line} side={thread.side} pastAsks={pastAsks} onClose={() => setIsAskOpen(false)} />
+        <AskBox route={route} file={thread.path} span={{ line: thread.line, side: thread.side }} pastAsks={pastAsks} onClose={() => setIsAskOpen(false)} />
       ) : null}
     </div>
   );
 }
 
+const VERDICT_ORDER = { valid: 0, unsure: 1, noise: 2 } as const;
+
+function verdictRank(verdict: ThreadVerdict | undefined): number {
+  return verdict ? VERDICT_ORDER[verdict.verdict] : -1;
+}
+
+function VerdictSummary({ verdicts }: { verdicts: (ThreadVerdict | undefined)[] }) {
+  const countOf = (kind: ThreadVerdict["verdict"]) => verdicts.filter((verdict) => verdict?.verdict === kind).length;
+  return (
+    <div className="verdict-summary">
+      <span className="chip valid">{countOf("valid")} valid</span>
+      <span className="chip unsure">{countOf("unsure")} unsure</span>
+      <span className="chip noise">{countOf("noise")} noise</span>
+    </div>
+  );
+}
+
 export function MyPrReview({ route, page }: { route: PrRoute; page: PrPageData }) {
-  const data = page.job!.data as TriageData;
+  const data = page.triage!.data as TriageData;
   const [state, setState] = useSavedState<MyPrState>(route, page.reviewState, { replies: {} });
   const verdictByThread = new Map(data.triage.threads.map((verdict) => [verdict.threadId, verdict]));
   const saveReply = (threadId: string, reply: ReplyState) =>
     setState((current) => ({ ...current, replies: { ...current.replies, [threadId]: reply } }));
+  const threads = [...page.pr.openThreads].sort((left, right) => verdictRank(verdictByThread.get(left.id)) - verdictRank(verdictByThread.get(right.id)));
+  const isNoise = (thread: Thread) => verdictByThread.get(thread.id)?.verdict === "noise";
+  const renderCard = (thread: Thread) => (
+    <ThreadCard key={thread.id} route={route} page={page} thread={thread} verdict={verdictByThread.get(thread.id)}
+      reply={state.replies[thread.id] ?? EMPTY_REPLY} onReplyChange={(reply) => saveReply(thread.id, reply)} />
+  );
+  const noiseThreads = threads.filter(isNoise);
 
   return (
-    <>
-      <h2>Comments waiting on you ({page.pr.openThreads.length})</h2>
-      {page.pr.openThreads.length === 0 ? <div className="empty">No open comments.</div> : null}
-      {page.pr.openThreads.map((thread) => (
-        <ThreadCard key={thread.id} route={route} page={page} thread={thread} verdict={verdictByThread.get(thread.id)}
-          reply={state.replies[thread.id] ?? EMPTY_REPLY} onReplyChange={(reply) => saveReply(thread.id, reply)} />
-      ))}
-    </>
+    <section id="comments">
+      <h2><Icon name="message" /> Comments waiting on you ({threads.length})</h2>
+      <VerdictSummary verdicts={threads.map((thread) => verdictByThread.get(thread.id))} />
+      {threads.length === 0 ? <div className="empty">No open comments.</div> : null}
+      {threads.filter((thread) => !isNoise(thread)).map(renderCard)}
+      {noiseThreads.length > 0 ? (
+        <details className="noise-group">
+          <summary>Probably noise ({noiseThreads.length}). Each has a draft reply.</summary>
+          {noiseThreads.map(renderCard)}
+        </details>
+      ) : null}
+    </section>
   );
 }
