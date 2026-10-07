@@ -5,7 +5,8 @@ import type { MainJobKind } from "../../server/jobKinds.ts";
 import type { JobStatus, PrKind, PullRequest } from "../../server/types.ts";
 
 export type { Concept, AskRecord, JobRecord, MainJobKind, ReviewCommentInput, ReviewEvent, PullRequest };
-export type { Walkthrough, Triage, Guide, HardIdea } from "../../server/schemas.ts";
+export type { Walkthrough, Triage, Guide, HardIdea, PictureNode } from "../../server/schemas.ts";
+import type { PictureNode } from "../../server/schemas.ts";
 export type { WalkthroughData, TriageData } from "../../server/walkthrough.ts";
 export type { WalkthroughChange } from "../../server/walkthroughMerge.ts";
 export type { DiffFile, DiffHunk, DiffLine, RemovedSymbol, SymbolUse } from "../../server/types.ts";
@@ -98,6 +99,7 @@ export const api = {
   file: (route: PrRoute, file: string) => requestJson<FileView>("GET", `${prUrl(route)}/file?${new URLSearchParams({ file })}`),
   snippet: (route: PrRoute, file: string, line: number) =>
     requestJson<Snippet>("GET", `${prUrl(route)}/snippet?${new URLSearchParams({ file, line: String(line) })}`),
+  pictureNodes: (route: PrRoute) => requestJson<PictureNode[]>("POST", `${prUrl(route)}/picture-nodes`),
 };
 
 export type AskInput = {

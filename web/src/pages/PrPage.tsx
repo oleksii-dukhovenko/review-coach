@@ -4,8 +4,9 @@ import { api, type JobRecord, type MainJobKind, type PrPageData, type PrRoute } 
 import { AutoUpdateToggle } from "../components/AutoUpdateToggle.tsx";
 import { ErrorBanner } from "../components/basics.tsx";
 import { Icon } from "../components/Icon.tsx";
+import { EssayReview } from "../essay/EssayReview.tsx";
+import type { EssayView } from "../essay/session.ts";
 import { MyPrReview } from "./MyPrReview.tsx";
-import { WalkthroughReview } from "./WalkthroughReview.tsx";
 
 const POLL_WHILE_BUILDING_MS = 5_000;
 
@@ -81,6 +82,18 @@ function isAnyJobReady(page: PrPageData): boolean {
   return page.jobKinds.some((kind) => page[kind]?.status === "ready");
 }
 
+function PrActions({ page, onRebuild }: { page: PrPageData; onRebuild: () => void }) {
+  const { pr } = page;
+  return (
+    <div className="pr-actions">
+      <a href="#/" className="btn btn-ghost btn-small btn-quiet"><Icon name="arrowLeft" size={15} /> Inbox</a>
+      <AutoUpdateToggle route={pr} isOn={page.autoUpdate} />
+      {isAnyJobReady(page) ? <button className="btn btn-ghost btn-small btn-quiet" onClick={onRebuild} title="Write everything again from scratch">Start over</button> : null}
+      <a className="btn btn-secondary btn-small" href={pr.url} target="_blank" rel="noreferrer"><Icon name="github" size={15} /> GitHub</a>
+    </div>
+  );
+}
+
 function PrHeader({ page, onRebuild }: { page: PrPageData; onRebuild: () => void }) {
   const { pr } = page;
   return (
@@ -106,7 +119,7 @@ function PrHeader({ page, onRebuild }: { page: PrPageData; onRebuild: () => void
   );
 }
 
-export function PrPage({ route }: { route: PrRoute }) {
+export function PrPage({ route, view, goTo }: { route: PrRoute; view: EssayView; goTo: (view: EssayView) => void }) {
   const [page, setPage] = useState<PrPageData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,20 +140,31 @@ export function PrPage({ route }: { route: PrRoute }) {
     if (window.confirm(question)) void api.rebuild(route).then(load);
   };
 
-  if (!page) return <p className="muted">{error ?? "Loading..."}</p>;
+  if (!page) return <p className="muted page-pad">{error ?? "Loading..."}</p>;
   const buildOf = (kind: MainJobKind) => (hasBuild(page[kind]) ? page[kind] : null);
+  const banners = page.jobKinds.map((kind) => (
+    <div key={kind}>
+      <BuildStatus kind={kind} job={page[kind]} onPrepare={prepare} />
+      {page.outOfDate[kind] ? <OutOfDateBanner kind={kind} onPrepare={prepare} /> : null}
+    </div>
+  ));
+  const triage = page.jobKinds.includes("triage") && buildOf("triage") ? <MyPrReview key={buildOf("triage")!.builtAt} route={route} page={page} /> : null;
+  const walkthrough = page.jobKinds.includes("walkthrough") ? buildOf("walkthrough") : null;
+  if (walkthrough) {
+    return (
+      <>
+        <div className="pr-banners"><ErrorBanner message={error} />{banners}</div>
+        <EssayReview key={walkthrough.builtAt} route={route} page={page} view={view} goTo={goTo}
+          actions={<PrActions page={page} onRebuild={rebuild} />} extra={triage} />
+      </>
+    );
+  }
   return (
-    <>
+    <div className="page-pad">
       <PrHeader page={page} onRebuild={rebuild} />
       <ErrorBanner message={error} />
-      {page.jobKinds.map((kind) => (
-        <div key={kind}>
-          <BuildStatus kind={kind} job={page[kind]} onPrepare={prepare} />
-          {page.outOfDate[kind] ? <OutOfDateBanner kind={kind} onPrepare={prepare} /> : null}
-          {kind === "triage" && buildOf(kind) ? <MyPrReview key={buildOf(kind)!.builtAt} route={route} page={page} /> : null}
-          {kind === "walkthrough" && buildOf(kind) ? <WalkthroughReview key={buildOf(kind)!.builtAt} route={route} page={page} onReload={() => void load()} /> : null}
-        </div>
-      ))}
-    </>
+      {banners}
+      {triage}
+    </div>
   );
 }

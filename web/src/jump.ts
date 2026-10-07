@@ -4,10 +4,6 @@ const FLASH_MS = 3000;
 const QUIET_AFTER_SCROLL_MS = 120;
 const LONGEST_SCROLL_MS = 2500;
 
-export function tourStopId(filePath: string): string {
-  return `stop-${filePath.replace(/[^a-zA-Z0-9]/g, "-")}`;
-}
-
 function openCollapsedParents(element: Element): void {
   for (let parent = element.parentElement; parent; parent = parent.parentElement) {
     if (parent instanceof HTMLDetailsElement) parent.open = true;
@@ -43,42 +39,18 @@ function markLanding(element: Element): void {
   });
 }
 
-function scrollToFile(stop: HTMLElement): void {
-  if (stop instanceof HTMLDetailsElement) stop.open = true;
-  stop.scrollIntoView({ behavior: "smooth", block: "start" });
-  markLanding(stop.querySelector(".tour-header, summary") ?? stop);
-}
-
-/** Scrolls to a file's tour stop; Back returns to where you were. */
-export function jumpToFile(filePath: string): boolean {
-  const stop = document.getElementById(tourStopId(filePath));
-  if (!stop) return false;
-  addHistoryStep();
-  scrollToFile(stop);
-  return true;
-}
-
-/** Scrolls to a page section; Back returns to where you were. */
-export function jumpToSection(sectionId: string): void {
-  const section = document.getElementById(sectionId);
-  if (!section) return;
-  addHistoryStep();
-  section.scrollIntoView({ behavior: "smooth", block: "start" });
-  markLanding(section.querySelector("h2") ?? section);
-}
-
 function findLineRow(filePath: string, line: number, side: "LEFT" | "RIGHT"): HTMLElement | null {
-  const selector = `td.code[data-file="${CSS.escape(filePath)}"][data-line="${line}"][data-side="${side}"]`;
-  return document.querySelector<HTMLElement>(selector)?.closest("tr") ?? null;
+  const selector = `.code[data-file="${CSS.escape(filePath)}"][data-line="${line}"][data-side="${side}"]`;
+  return document.querySelector<HTMLElement>(selector)?.closest<HTMLElement>("tr, .fig-row") ?? null;
 }
 
-/** Scrolls to a diff line; falls back to the file's tour stop. */
-export function jumpToLine(filePath: string, line: number, side: "LEFT" | "RIGHT"): "line" | "file" | "missing" {
+/** Scrolls to a diff line; false when it is not on the page. */
+export function jumpToLine(filePath: string, line: number, side: "LEFT" | "RIGHT"): boolean {
   const row = findLineRow(filePath, line, side);
-  if (!row) return jumpToFile(filePath) ? "file" : "missing";
+  if (!row) return false;
   addHistoryStep();
   openCollapsedParents(row);
   row.scrollIntoView({ behavior: "smooth", block: "center" });
   markLanding(row);
-  return "line";
+  return true;
 }

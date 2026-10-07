@@ -5,7 +5,7 @@ import type { CoachingQuestionData } from "../components/Coaching.tsx";
 import type { PlacedComment } from "../placeComments.ts";
 import type { ReviewState } from "../savedState.ts";
 
-type ConfirmedProblem = { file: string; question: CoachingQuestionData; draft: string };
+export type ConfirmedProblem = { file: string; question: CoachingQuestionData; draft: string };
 
 type FinishPanelProps = {
   route: PrRoute;
@@ -16,13 +16,13 @@ type FinishPanelProps = {
   lineComments: PlacedComment[];
 };
 
-const VERDICT_LABEL: Record<ReviewEvent, string> = {
+export const VERDICT_LABEL: Record<ReviewEvent, string> = {
   APPROVE: "Approve",
   REQUEST_CHANGES: "Request changes",
   COMMENT: "Comment only",
 };
 
-function confirmedProblems(walkthrough: Walkthrough, state: ReviewState): ConfirmedProblem[] {
+export function confirmedProblems(walkthrough: Walkthrough, state: ReviewState): ConfirmedProblem[] {
   return walkthrough.tour.flatMap((stop) =>
     stop.questions
       .filter((question) => state.answers[question.id]?.decision === "problem")
@@ -57,13 +57,13 @@ function isWritten(comment: PlacedComment): boolean {
   return comment.body.trim() !== "";
 }
 
-function allReviewComments(problems: ConfirmedProblem[], lineComments: PlacedComment[]): ReviewCommentInput[] {
+export function allReviewComments(problems: ConfirmedProblem[], lineComments: PlacedComment[]): ReviewCommentInput[] {
   const anchoredComments = lineComments.filter((comment) => isWritten(comment) && !comment.isOutdated);
   return [...problems.map(toReviewComment), ...anchoredComments.map(lineCommentToReviewComment)];
 }
 
 /** Comments whose code changed go in the summary, since their line is gone. */
-function summaryWithOutdated(summary: string, lineComments: PlacedComment[]): string {
+export function summaryWithOutdated(summary: string, lineComments: PlacedComment[]): string {
   const outdated = lineComments.filter((comment) => isWritten(comment) && comment.isOutdated);
   const bullets = outdated.map((comment) => `- \`${comment.file}\`: ${comment.body.replace(/\n/g, " ")}`);
   return [summary, ...bullets].join("\n").trim();

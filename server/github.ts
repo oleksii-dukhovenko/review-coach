@@ -10,7 +10,7 @@ const PULL_REQUEST_QUERY = `
 query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
-      title body url state isDraft updatedAt additions deletions
+      title body url state isDraft createdAt updatedAt additions deletions
       headRefOid baseRefOid baseRefName author { login }
       reviewThreads(first: 100) {
         nodes {
@@ -79,6 +79,7 @@ type RawPullRequest = {
   url: string;
   state: "OPEN" | "CLOSED" | "MERGED";
   isDraft: boolean;
+  createdAt: string;
   updatedAt: string;
   additions: number;
   deletions: number;
@@ -142,6 +143,7 @@ export async function fetchPullRequest(ref: PrRef, kind: PrKind): Promise<PullRe
     baseRef: raw.baseRefName,
     additions: raw.additions,
     deletions: raw.deletions,
+    createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
     openThreads: kind === "mine" ? openThreadsWaitingOnMe(raw, viewerLogin) : [],
   };

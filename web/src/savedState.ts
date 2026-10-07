@@ -15,6 +15,8 @@ export type QuestionAnswer = {
   draft: string;
   explanation?: string;
   followUps?: Exchange[];
+  // - "Skip for now" on the question.
+  skipped?: boolean;
 };
 
 // - lineText and startLineText let the comment follow its code after new commits.

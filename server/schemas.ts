@@ -79,10 +79,20 @@ const story = z.object({
   glossary: z.array(glossaryEntry).describe("Domain nouns used below, defined first. Max 8."),
 });
 
+const pictureNode = z.object({
+  id: z.string().describe("The Mermaid node id, exactly as written in the diagram source"),
+  file: z.string().describe("Repo path of the code this box stands for, at the PR head. Empty if the box is not code in this repo."),
+  startLine: z.number().int().describe("First line of that function or block, new-file line numbers. 0 if file is empty."),
+  endLine: z.number().int().describe("Last line of that function or block. Cover the whole function, max 120 lines."),
+});
+
 const picture = z.object({
   caption: z.string().describe("Max 12 words: what the picture shows"),
   diagram: z.string().describe(MERMAID_RULES),
+  nodes: z.array(pictureNode).describe("Where each box lives in the code: one entry per node in the diagram"),
 });
+
+export const pictureMapSchema = z.object({ nodes: z.array(pictureNode).describe("One entry per node in the diagram") });
 
 export const walkthroughSchema = z.object({
   story,
@@ -106,6 +116,7 @@ export type WalkthroughUpdate = z.infer<typeof walkthroughUpdateSchema>;
 export type TourStop = z.infer<typeof tourStop>;
 export type HardIdea = z.infer<typeof hardIdea>;
 export type Proof = z.infer<typeof proof>;
+export type PictureNode = z.infer<typeof pictureNode>;
 
 const guideFile = z.object({
   file: z.string(),
@@ -152,3 +163,4 @@ export const walkthroughJsonSchema = toClaudeJsonSchema(walkthroughSchema);
 export const walkthroughUpdateJsonSchema = toClaudeJsonSchema(walkthroughUpdateSchema);
 export const triageJsonSchema = toClaudeJsonSchema(triageSchema);
 export const guideJsonSchema = toClaudeJsonSchema(guideSchema);
+export const pictureMapJsonSchema = toClaudeJsonSchema(pictureMapSchema);

@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { api, type FileView, type PrRoute, type Reference, type ReferenceQuery } from "../api.ts";
 import { commentFlags } from "./commentLines.ts";
-import { isPeekClick } from "./DiffView.tsx";
+import { isPeekClick } from "./lineClicks.ts";
 import { languageForFile, renderCodeLine } from "./highlight.ts";
 import { Icon } from "./Icon.tsx";
 import { PeekReferences } from "./PeekReferences.tsx";

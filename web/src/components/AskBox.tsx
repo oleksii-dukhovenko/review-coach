@@ -12,9 +12,9 @@ type AskBoxProps = {
   onClose: () => void;
 };
 
-type Exchange = { question: string; answer: string };
+export type Exchange = { question: string; answer: string };
 
-function PastExchange({ exchange }: { exchange: Exchange }) {
+export function PastExchange({ exchange }: { exchange: Exchange }) {
   return (
     <div className="ask-thread">
       <div className="small"><strong>You:</strong> {exchange.question}</div>
@@ -23,19 +23,16 @@ function PastExchange({ exchange }: { exchange: Exchange }) {
   );
 }
 
-export function AskBox({ route, file, span, pastAsks, onClose }: AskBoxProps) {
-  const [draft, setDraft] = useState("");
+type LineAsk = { route: PrRoute; file: string; span: LineSpan; pastAsks: AskRecord[] };
+
+/** Asks Claude about some lines and keeps the thread, answers streaming in. */
+export function useLineAsk({ route, file, span, pastAsks }: LineAsk) {
   const [exchanges, setExchanges] = useState<Exchange[]>(pastAsks.map(({ question, answer }) => ({ question, answer })));
   const [isAsking, setIsAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const updateLatestAnswer = (answerSoFar: string) =>
     setExchanges((current) => [...current.slice(0, -1), { ...current.at(-1)!, answer: answerSoFar }]);
-
-  async function submit() {
-    const question = draft.trim();
-    if (!question || isAsking) return;
-    setDraft("");
+  const ask = async (question: string) => {
     setError(null);
     setIsAsking(true);
     setExchanges((current) => [...current, { question, answer: "" }]);
@@ -46,6 +43,20 @@ export function AskBox({ route, file, span, pastAsks, onClose }: AskBoxProps) {
     } finally {
       setIsAsking(false);
     }
+  };
+  return { exchanges, isAsking, error, ask };
+}
+
+export function AskBox({ route, file, span, pastAsks, onClose }: AskBoxProps) {
+  const [draft, setDraft] = useState("");
+  const lineAsk = useLineAsk({ route, file, span, pastAsks });
+  const { exchanges, isAsking, error } = lineAsk;
+
+  async function submit() {
+    const question = draft.trim();
+    if (!question || isAsking) return;
+    setDraft("");
+    await lineAsk.ask(question);
   }
 
   const submitOnEnter = (event: React.KeyboardEvent) => {
