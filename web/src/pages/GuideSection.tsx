@@ -11,6 +11,8 @@ type GuideSectionProps = {
   statusOf: (file: DiffFile) => ReviewedStatus;
   toggleReviewed: (file: DiffFile) => void;
   onOpenFile: (filePath: string) => void;
+  // - Opening a file from a step shows the guide bar for that step.
+  onStartStep: (stepIndex: number) => void;
   onPrepare: () => void;
 };
 
@@ -91,8 +93,13 @@ function ChapterMore({ chapter }: { chapter: Chapter }) {
 
 type StepProps = { chapter: Chapter; stepNumber: number; stats: ChapterStats; isNext: boolean; props: GuideSectionProps; fileByPath: Map<string, DiffFile> };
 
-function StepView({ chapter, stepNumber, stats, isNext, props, fileByPath }: StepProps) {
+function StepView({ chapter, stepNumber, stats, isNext, props: sectionProps, fileByPath }: StepProps) {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const openInStep = (filePath: string) => {
+    sectionProps.onStartStep(stepNumber - 1);
+    sectionProps.onOpenFile(filePath);
+  };
+  const props = { ...sectionProps, onOpenFile: openInStep };
   const isDone = isChapterDone(stats);
   return (
     <li className={`step role-${chapter.role} ${isDone ? "is-done" : ""} ${isNext ? "is-next" : ""}`}>
@@ -157,7 +164,9 @@ function GuideSteps({ guide, props }: { guide: Guide; props: GuideSectionProps }
   const nextChapter = nextIndex === -1 ? undefined : guide.chapters[nextIndex];
   const startNext = () => {
     const file = nextChapter && firstUnreviewedFile(nextChapter, fileByPath, props.statusOf);
-    if (file) props.onOpenFile(file);
+    if (!file) return;
+    props.onStartStep(nextIndex);
+    props.onOpenFile(file);
   };
   return (
     <>

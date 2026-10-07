@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type { Concept, DiffFile, HardIdea, PrRoute, RemovedSymbol, Walkthrough, WalkthroughChange } from "../api.ts";
 import { Markdown } from "../components/basics.tsx";
+import { StillFuzzyArea, useStillFuzzy, type ExplainChatState } from "../components/ExplainChat.tsx";
 import { FlowDiagram } from "../components/FlowDiagram.tsx";
 import { Icon } from "../components/Icon.tsx";
 import { Mermaid } from "../components/Mermaid.tsx";
@@ -114,15 +115,39 @@ export function PictureSection({ picture }: { picture: Walkthrough["picture"] | 
   );
 }
 
+// - Lets "Still fuzzy" ask Claude for another way in, and keep that chat.
+export type IdeaChats = {
+  route: PrRoute;
+  chats: Record<string, ExplainChatState>;
+  onChatChange: (chatKey: string, chat: ExplainChatState) => void;
+};
+
 type HardIdeaProps = {
   idea: HardIdea;
   concept: Concept | undefined;
   onSave: (status: Concept["status"]) => void;
   onOpenLine: OpenLine;
+  ideaChats: IdeaChats;
 };
 
-function HardIdeaCard({ idea, concept, onSave, onOpenLine }: HardIdeaProps) {
+export function ideaChatKey(idea: HardIdea): string {
+  return `idea:${idea.conceptKey}`;
+}
+
+function whatTheIdeaSaid(idea: HardIdea): string {
+  return [idea.oneLiner, idea.analogy && `Like: ${idea.analogy}`, idea.jsExample && `In JS: ${idea.jsExample}`, `Term: ${idea.term}`]
+    .filter(Boolean).join("\n");
+}
+
+function HardIdeaCard({ idea, concept, onSave, onOpenLine, ideaChats }: HardIdeaProps) {
   const isLearned = concept?.status === "learned";
+  const isFuzzy = concept?.status === "fuzzy";
+  const chatKey = ideaChatKey(idea);
+  const chat = ideaChats.chats[chatKey];
+  const fuzzy = useStillFuzzy({
+    subject: { route: ideaChats.route, file: idea.file, span: { line: idea.line, side: "RIGHT" }, topic: `the idea "${idea.title}"` },
+    alreadySaid: whatTheIdeaSaid(idea), chat, onChatChange: (updated) => ideaChats.onChatChange(chatKey, updated), onMarkFuzzy: () => onSave("fuzzy"),
+  });
   return (
     <div className={`idea ${isLearned ? "is-learned" : ""}`}>
       <div className="idea-title"><Icon name="bulb" /> {idea.title}</div>
@@ -136,17 +161,19 @@ function HardIdeaCard({ idea, concept, onSave, onOpenLine }: HardIdeaProps) {
       </div>
       <div className="button-row">
         {isLearned ? <span className="chip ready"><Icon name="check" size={12} /> You know this</span> : <button onClick={() => onSave("learned")}>Got it</button>}
-        {concept?.status !== "fuzzy" ? <button onClick={() => onSave("fuzzy")}>Still fuzzy</button> : <span className="chip unsure">Still fuzzy</span>}
+        {isFuzzy ? <span className="chip unsure">Still fuzzy</span> : <button onClick={fuzzy.markFuzzy}>Still fuzzy</button>}
       </div>
+      <StillFuzzyArea fuzzy={fuzzy} chat={chat} isFuzzy={isFuzzy} />
     </div>
   );
 }
 
-export function HardIdeasSection({ ideas, conceptsByKey, onSave, onOpenLine }: {
+export function HardIdeasSection({ ideas, conceptsByKey, onSave, onOpenLine, ideaChats }: {
   ideas: HardIdea[] | undefined;
   conceptsByKey: Map<string, Concept>;
   onSave: (idea: HardIdea, status: Concept["status"]) => void;
   onOpenLine: OpenLine;
+  ideaChats: IdeaChats;
 }) {
   if (!ideas?.length) return null;
   return (
@@ -155,7 +182,7 @@ export function HardIdeasSection({ ideas, conceptsByKey, onSave, onOpenLine }: {
       <div className="idea-grid">
         {ideas.map((idea) => (
           <HardIdeaCard key={idea.conceptKey} idea={idea} concept={conceptsByKey.get(idea.conceptKey)}
-            onSave={(status) => onSave(idea, status)} onOpenLine={onOpenLine} />
+            onSave={(status) => onSave(idea, status)} onOpenLine={onOpenLine} ideaChats={ideaChats} />
         ))}
       </div>
     </section>

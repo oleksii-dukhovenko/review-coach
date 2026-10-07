@@ -1,8 +1,12 @@
 import { useState } from "react";
 
 import { askQuestion, type Concept, type PrRoute, type Walkthrough } from "../api.ts";
-import { EMPTY_ANSWER, type Decision, type Exchange, type QuestionAnswer } from "../savedState.ts";
+import type { LineSpan } from "../../../server/anchors.ts";
+import { EMPTY_ANSWER, type Decision, type QuestionAnswer } from "../savedState.ts";
 import { Markdown, ProofBadge } from "./basics.tsx";
+import {
+  ExplanationBox, explainPrompt, StillFuzzyArea, useExplainChat, useStillFuzzy, type ExplainChatState, type ExplainSubject,
+} from "./ExplainChat.tsx";
 import { Icon } from "./Icon.tsx";
 
 type TourStop = Walkthrough["tour"][number];
@@ -20,36 +24,8 @@ function checkAnswerPrompt(question: CoachingQuestionData, typed: string): strin
   ].join("\n");
 }
 
-function explainPrompt(question: CoachingQuestionData): string {
-  return [
-    `Coaching question: "${question.question}"`,
-    `The answer: ${question.because}`,
-    `An example: ${question.example}`,
-    "Explain this to me like I'm five. Assume I have never met these ideas.",
-    "- Start with **TL;DR:** and the whole point in one plain sentence.",
-    "- Then **What's going on:** 2-4 short bullets, everyday words, one idea each.",
-    "- Then **Example:** a tiny concrete story with real values: what goes in, what happens, what someone sees.",
-    "  Add a short code or JS snippet only if it makes it clearer.",
-    "- Then **Why it matters:** one line, consequence first.",
-    "- End with the technical term in one line.",
-    "Max ~15 short lines. No jargon without a one-line gloss.",
-  ].join("\n");
-}
-
-/** Restates what "this" is, since other questions may share the chat. */
-function followUpPrompt(question: CoachingQuestionData, explanation: string, earlier: Exchange[], asked: string): string {
-  const history = earlier.map((exchange) => `Me: ${exchange.question}\nYou: ${exchange.answer}`).join("\n\n");
-  return [
-    `We are talking about the coaching question: "${question.question}"`,
-    `You explained it like this:\n${explanation}`,
-    history ? `Our chat so far:\n${history}` : "",
-    `My follow-up: ${asked}`,
-    "Keep the same style: TL;DR first, plain words, a concrete example when it helps. Short.",
-  ].filter(Boolean).join("\n\n");
-}
-
 /** The question's lines, as a range when it covers more than one. */
-function questionSpan(question: CoachingQuestionData) {
+function questionSpan(question: CoachingQuestionData): LineSpan {
   const lastLine = Math.max(question.endLine ?? question.line, question.line);
   const range = lastLine > question.line ? { startLine: question.line, startSide: question.side } : {};
   return { line: lastLine, side: question.side, ...range };
@@ -107,46 +83,6 @@ function ExplainButton({ isExplaining, onExplain }: { isExplaining: boolean; onE
   );
 }
 
-function FollowUpInput({ isBusy, onSend }: { isBusy: boolean; onSend: (asked: string) => void }) {
-  const [draft, setDraft] = useState("");
-  const send = () => {
-    const asked = draft.trim();
-    if (!asked || isBusy) return;
-    setDraft("");
-    onSend(asked);
-  };
-  const sendOnEnter = (event: React.KeyboardEvent) => {
-    if (event.key !== "Enter" || event.shiftKey) return;
-    event.preventDefault();
-    send();
-  };
-  return (
-    <div className="follow-up-input">
-      <textarea rows={1} placeholder="Ask a follow-up... (Enter to send, Shift+Enter for a new line)" value={draft}
-        onChange={(event) => setDraft(event.target.value)} onKeyDown={sendOnEnter} />
-      <button className="primary" disabled={isBusy || !draft.trim()} onClick={send}>Send</button>
-    </div>
-  );
-}
-
-type ExplanationBoxProps = { text: string; followUps: Exchange[]; isWriting: boolean; onFollowUp: (asked: string) => void };
-
-function ExplanationBox({ text, followUps, isWriting, onFollowUp }: ExplanationBoxProps) {
-  return (
-    <div className="explain-box">
-      <div className="eyebrow"><Icon name="sparkles" size={13} /> Explained simply {isWriting ? <span className="chip building">Writing</span> : null}</div>
-      <Markdown text={text || "..."} />
-      {followUps.map((exchange, exchangeIndex) => (
-        <div key={exchangeIndex} className="follow-up">
-          <div className="follow-up-question">{exchange.question}</div>
-          <Markdown text={exchange.answer || "..."} />
-        </div>
-      ))}
-      {text ? <FollowUpInput isBusy={isWriting} onSend={onFollowUp} /> : null}
-    </div>
-  );
-}
-
 type AnswerBoxProps = {
   answer: QuestionAnswer;
   isChecking: boolean;
@@ -180,35 +116,23 @@ function AnswerBox({ answer, isChecking, isExplaining, onType, onCheck, onReveal
   );
 }
 
+function questionChat(answer: QuestionAnswer): ExplainChatState | undefined {
+  return answer.explanation === undefined ? undefined : { explanation: answer.explanation, followUps: answer.followUps };
+}
+
+function whatTheQuestionSaid(question: CoachingQuestionData): string {
+  return `${question.because}\n\nExample: ${question.example}`;
+}
+
 export function CoachingQuestion({ route, file, question, answer = EMPTY_ANSWER, onChange }: QuestionProps) {
   const [isChecking, setIsChecking] = useState(false);
-  const [isExplaining, setIsExplaining] = useState(false);
-  const [explainError, setExplainError] = useState<string | null>(null);
   const update = (changes: Partial<QuestionAnswer>) => onChange({ ...answer, ...changes });
-
-  /** Streams one answer from Claude about this question's lines. */
-  async function askAboutQuestion(prompt: string, onText: (text: string) => void) {
-    setIsExplaining(true);
-    setExplainError(null);
-    try {
-      await askQuestion(route, { file, ...questionSpan(question), question: prompt, keepInHistory: false }, onText);
-    } catch (error) {
-      setExplainError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsExplaining(false);
-    }
-  }
-
-  /** Explaining shows the answer too, so the question counts as revealed. */
-  const explain = () =>
-    askAboutQuestion(explainPrompt(question), (explanation) => onChange({ ...answer, explanation, revealed: true }));
-
-  const followUp = (asked: string) => {
-    const earlier = answer.followUps ?? [];
-    const withAnswer = (text: string) => onChange({ ...answer, followUps: [...earlier, { question: asked, answer: text }] });
-    withAnswer("");
-    void askAboutQuestion(followUpPrompt(question, answer.explanation ?? "", earlier, asked), withAnswer);
-  };
+  const subject: ExplainSubject = { route, file, span: questionSpan(question), topic: `the coaching question "${question.question}"` };
+  // - Explaining shows the answer too, so the question counts as revealed.
+  const saveChat = (chat: ExplainChatState) => onChange({ ...answer, explanation: chat.explanation, followUps: chat.followUps, revealed: true });
+  const explainer = useExplainChat(subject, questionChat(answer), saveChat);
+  const isExplaining = explainer.isWriting;
+  const explain = () => explainer.start(explainPrompt(subject.topic, whatTheQuestionSaid(question)));
 
   async function checkMyAnswer() {
     setIsChecking(true);
@@ -233,12 +157,12 @@ export function CoachingQuestion({ route, file, question, answer = EMPTY_ANSWER,
         <AnswerBox answer={answer} isChecking={isChecking} isExplaining={isExplaining} onType={(typed) => update({ typed })}
           onCheck={() => void checkMyAnswer()} onReveal={() => update({ revealed: true })} onExplain={() => void explain()} />
       ) : null}
-      {explainError ? <div className="banner error" style={{ marginTop: 8 }}>Could not explain: {explainError}</div> : null}
+      {explainer.error && answer.explanation === undefined ? <div className="banner error" style={{ marginTop: 8 }}>Could not explain: {explainer.error}</div> : null}
       {answer.typed && answer.revealed ? <div className="small muted" style={{ marginTop: 6 }}>You said: {answer.typed}</div> : null}
       {answer.feedback ? <div className="answer-box"><h3>Coach</h3><Markdown text={answer.feedback} /></div> : null}
       {answer.revealed ? <RevealedAnswer question={question} /> : null}
       {answer.explanation !== undefined ? (
-        <ExplanationBox text={answer.explanation} followUps={answer.followUps ?? []} isWriting={isExplaining} onFollowUp={followUp} />
+        <ExplanationBox chat={questionChat(answer)!} isWriting={isExplaining} error={explainer.error} onFollowUp={explainer.followUp} />
       ) : null}
       {answer.revealed && answer.explanation === undefined ? (
         <div className="button-row"><ExplainButton isExplaining={isExplaining} onExplain={() => void explain()} /></div>
@@ -252,6 +176,10 @@ type NoteProps = {
   note: TeachingNoteData;
   concept: Concept | undefined;
   onSave: (status: Concept["status"]) => void;
+  // - Where the note sits, for asking Claude about it.
+  subject: Omit<ExplainSubject, "topic">;
+  chat: ExplainChatState | undefined;
+  onChatChange: (chat: ExplainChatState) => void;
 };
 
 function NoteBody({ note }: { note: TeachingNoteData }) {
@@ -268,31 +196,41 @@ function oneLinerOf(note: TeachingNoteData): string {
   return note.oneLiner || note.explanation.split(/(?<=\.)\s/)[0];
 }
 
-export function TeachingNote({ note, concept, onSave }: NoteProps) {
+function whatTheNoteSaid(note: TeachingNoteData): string {
+  return [oneLinerOf(note), note.explanation, note.jsExample && `In JS: ${note.jsExample}`].filter(Boolean).join("\n\n");
+}
+
+export function TeachingNote({ note, concept, onSave, subject, chat, onChatChange }: NoteProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const fuzzy = useStillFuzzy({
+    subject: { ...subject, topic: `the idea "${note.title}"` }, alreadySaid: whatTheNoteSaid(note),
+    chat, onChatChange, onMarkFuzzy: () => onSave("fuzzy"),
+  });
   if (concept?.status === "learned") {
     return (
       <details className="note known">
         <summary className="small"><Icon name="check" size={13} /> You know this: {note.title}</summary>
         <NoteBody note={note} />
-        <div className="button-row"><button onClick={() => onSave("fuzzy")}>Actually, still fuzzy</button></div>
+        <div className="button-row"><button onClick={fuzzy.markFuzzy}>Actually, still fuzzy</button></div>
       </details>
     );
   }
+  const isFuzzy = concept?.status === "fuzzy";
   return (
     <div className="note">
       <div className="callout-title">
         <Icon name="bulb" /> <strong>{note.title}</strong>
         <span className="chip">{note.kind}</span>
-        {concept?.status === "fuzzy" ? <span className="chip unsure">Still fuzzy</span> : null}
+        {isFuzzy ? <span className="chip unsure">Still fuzzy</span> : null}
       </div>
       <p className="note-one-liner">{oneLinerOf(note)}</p>
       {isOpen ? <NoteBody note={note} /> : null}
       <div className="button-row">
         <button className="link-button" onClick={() => setIsOpen(!isOpen)}>{isOpen ? "Less" : "Explain more"}</button>
         <button onClick={() => onSave("learned")}>Got it</button>
-        {concept?.status !== "fuzzy" ? <button onClick={() => onSave("fuzzy")}>Still fuzzy</button> : null}
+        {isFuzzy ? null : <button onClick={fuzzy.markFuzzy}>Still fuzzy</button>}
       </div>
+      <StillFuzzyArea fuzzy={fuzzy} chat={chat} isFuzzy={isFuzzy} />
     </div>
   );
 }

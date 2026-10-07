@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from "react";
 
-import { api, type AskRecord, type Concept, type DiffFile, type HardIdea, type PrPageData, type PrRoute, type Reference, type ReferenceQuery, type WalkthroughData } from "../api.ts";
+import { api, type AskRecord, type Concept, type DiffFile, type Guide, type HardIdea, type PrPageData, type PrRoute, type Reference, type ReferenceQuery, type WalkthroughData } from "../api.ts";
 import { CoachingQuestion, TeachingNote, type CoachingQuestionData, type TeachingNoteData } from "../components/Coaching.tsx";
+import type { ExplainChatState } from "../components/ExplainChat.tsx";
 import { DiffView, isInDiff, type LineRef } from "../components/DiffView.tsx";
 import { setDiffLayout, useDiffLayout } from "../components/diffLayout.ts";
 import { FileViewer, useFileViewer } from "../components/FileViewer.tsx";
@@ -16,6 +17,7 @@ import { FinishPanel } from "./FinishPanel.tsx";
 import { useActiveAnchor } from "../activeAnchor.ts";
 import { jumpToFile, jumpToLine, jumpToSection, tourStopId } from "../jump.ts";
 import { diffFingerprint, reviewedStatusOf, type ReviewedStatus } from "../reviewedFiles.ts";
+import { GuideDock } from "./GuideDock.tsx";
 import { GuideSection } from "./GuideSection.tsx";
 import { AtAGlance, ChangesBanner, FlowSection, HardIdeasSection, PictureSection, RemovedCodeSection, skimFiles } from "./WalkthroughSections.tsx";
 
@@ -25,7 +27,9 @@ type OpenAsk = { file: string } & LineSpan;
 
 type OpenPeek = ReferenceQuery;
 
-const DEFAULT_REVIEW_STATE: ReviewState = { answers: {}, lineComments: [], reviewedFiles: {}, summary: "", verdict: null, postedUrl: null };
+const DEFAULT_REVIEW_STATE: ReviewState = {
+  answers: {}, explainChats: {}, lineComments: [], reviewedFiles: {}, summary: "", verdict: null, postedUrl: null,
+};
 
 function isAtLine(item: { line: number; side: string }, lineRef: LineRef): boolean {
   return item.line === lineRef.line && item.side === lineRef.side;
@@ -52,6 +56,8 @@ type Coaching = {
   setOpenPeek: (peek: OpenPeek | null) => void;
   saveAnswer: (questionId: string, answer: QuestionAnswer) => void;
   saveConcept: (source: ConceptSource, status: Concept["status"]) => void;
+  explainChats: ReviewState["explainChats"];
+  saveExplainChat: (chatKey: string, chat: ExplainChatState) => void;
   lineComments: PlacedComment[];
   addLineComment: (file: string, span: LineSpan, body: string) => void;
   updateLineComment: (commentId: string, body: string) => void;
@@ -65,6 +71,21 @@ type Coaching = {
 
 function openSpanIn(coaching: Coaching, file: string): LineSpan | undefined {
   return coaching.openAsk?.file === file ? coaching.openAsk : undefined;
+}
+
+function noteChatKey(file: string, note: TeachingNoteData): string {
+  return `note:${file}:${note.conceptKey}:${note.line}`;
+}
+
+/** A teaching note whose "Still fuzzy" chat is saved with the review. */
+function NoteWithChat({ note, file, coaching }: { note: TeachingNoteData; file: string; coaching: Coaching }) {
+  const chatKey = noteChatKey(file, note);
+  const lastLine = Math.max(note.endLine ?? note.line, note.line);
+  const span = lastLine > note.line ? { line: lastLine, side: note.side, startLine: note.line, startSide: note.side } : { line: note.line, side: note.side };
+  return (
+    <TeachingNote note={note} concept={coaching.conceptsByKey.get(note.conceptKey)} onSave={(status) => coaching.saveConcept(note, status)}
+      subject={{ route: coaching.route, file, span }} chat={coaching.explainChats[chatKey]} onChatChange={(chat) => coaching.saveExplainChat(chatKey, chat)} />
+  );
 }
 
 function commentsAt(coaching: Coaching, file: string, lineRef: LineRef): PlacedComment[] {
@@ -85,9 +106,7 @@ function LineAnnotations({ file, notes, questions, lineRef, coaching }: {
         <PeekReferences key={`${peek.word}:${peek.column}`} route={coaching.route} query={peek}
           onClose={() => coaching.setOpenPeek(null)} onJump={coaching.jumpToReference} />
       ) : null}
-      {notes.map((note, noteIndex) => (
-        <TeachingNote key={noteIndex} note={note} concept={coaching.conceptsByKey.get(note.conceptKey)} onSave={(status) => coaching.saveConcept(note, status)} />
-      ))}
+      {notes.map((note, noteIndex) => <NoteWithChat key={noteIndex} note={note} file={file} coaching={coaching} />)}
       {questions.map((question) => (
         <CoachingQuestion key={question.id} route={coaching.route} file={file} question={question}
           answer={coaching.answers[question.id]} onChange={(answer) => coaching.saveAnswer(question.id, answer)} />
@@ -123,9 +142,7 @@ function OutsideDiffItems({ stop, file, coaching }: { stop: TourStop; file: Diff
   return (
     <div className="tour-outside">
       <div className="small muted">About lines outside the diff:</div>
-      {notes.map((note, noteIndex) => (
-        <TeachingNote key={noteIndex} note={note} concept={coaching.conceptsByKey.get(note.conceptKey)} onSave={(status) => coaching.saveConcept(note, status)} />
-      ))}
+      {notes.map((note, noteIndex) => <NoteWithChat key={noteIndex} note={note} file={stop.file} coaching={coaching} />)}
       {questions.map((question) => (
         <CoachingQuestion key={question.id} route={coaching.route} file={stop.file} question={question}
           answer={coaching.answers[question.id]} onChange={(answer) => coaching.saveAnswer(question.id, answer)} />
@@ -338,6 +355,8 @@ function useCoaching(route: PrRoute, page: PrPageData, state: ReviewState, setSt
   const navigation = useFileNavigation(viewer, () => setOpenPeek(null));
   return {
     route, asks: page.asks, conceptsByKey, answers: state.answers, openAsk, setOpenAsk, openPeek, setOpenPeek, saveAnswer, saveConcept,
+    explainChats: state.explainChats, saveExplainChat: (chatKey: string, chat: ExplainChatState) =>
+      setState((current) => ({ ...current, explainChats: { ...current.explainChats, [chatKey]: chat } })),
     lineComments: placeLineComments(state.lineComments, files), ...lineCommentActions(setState, files), ...reviewedFileActions(state, setState), ...navigation,
   } satisfies Coaching & typeof navigation;
 }
@@ -396,6 +415,16 @@ function MapStop({ stop, stopNumber, name, file, coaching, isActive }: {
   );
 }
 
+/** The tour file at the top of the screen right now. */
+function useCurrentTourFile(stops: TourStop[]): string | undefined {
+  const activeId = useActiveAnchor(stops.map((stop) => tourStopId(stop.file)));
+  return stops.find((stop) => tourStopId(stop.file) === activeId)?.file;
+}
+
+function readyGuide(page: PrPageData): Guide | null {
+  return page.guide?.builtAt ? (page.guide.data as Guide | null) : null;
+}
+
 const SECTION_IDS = ["glance", "picture", "ideas", "guide", "flow", "removed"];
 
 /** The sticky map on the left: sections, then every tour stop. */
@@ -435,6 +464,9 @@ export function WalkthroughReview({ route, page, onReload }: { route: PrRoute; p
   const saveHardIdea = (idea: HardIdea, status: Concept["status"]) => coaching.saveConcept(hardIdeaAsConcept(idea), status);
   const latestChange = data.changes?.at(-1);
   const updatedFiles = new Set(latestChange?.files ?? []);
+  const [guideStep, setGuideStep] = useState<number | null>(null);
+  const currentFile = useCurrentTourFile(stops);
+  const guide = readyGuide(page);
 
   return (
     <div className="review-layout">
@@ -443,9 +475,10 @@ export function WalkthroughReview({ route, page, onReload }: { route: PrRoute; p
         <ChangesBanner change={latestChange} onOpenFile={coaching.openFile} />
         <AtAGlance story={data.walkthrough.story} />
         <PictureSection picture={data.walkthrough.picture} />
-        <HardIdeasSection ideas={data.walkthrough.hardIdeas} conceptsByKey={coaching.conceptsByKey} onSave={saveHardIdea} onOpenLine={coaching.openLine} />
+        <HardIdeasSection ideas={data.walkthrough.hardIdeas} conceptsByKey={coaching.conceptsByKey} onSave={saveHardIdea} onOpenLine={coaching.openLine}
+          ideaChats={{ route, chats: coaching.explainChats, onChatChange: coaching.saveExplainChat }} />
         <GuideSection guideJob={page.guide} files={data.files} statusOf={coaching.statusOf} toggleReviewed={coaching.toggleReviewed}
-          onOpenFile={coaching.openFile} onPrepare={() => void api.prepareGuide(route).then(onReload)} />
+          onOpenFile={coaching.openFile} onPrepare={() => void api.prepareGuide(route).then(onReload)} onStartStep={setGuideStep} />
         <FlowSection route={route} flow={data.walkthrough.flow} files={data.files} onOpenLine={coaching.openLine} />
         <RemovedCodeSection removed={data.removed} />
         <section id="tour">
@@ -463,6 +496,10 @@ export function WalkthroughReview({ route, page, onReload }: { route: PrRoute; p
         {isSomeoneElsesPr ? <FinishPanel route={route} walkthrough={data.walkthrough} state={state} setState={setState} lineComments={coaching.lineComments} /> : null}
       </div>
       <FileViewer route={route} viewer={viewer} />
+      {guide && guideStep !== null ? (
+        <GuideDock guide={guide} stepIndex={guideStep} files={data.files} currentFile={currentFile} statusOf={coaching.statusOf}
+          toggleReviewed={coaching.toggleReviewed} onOpenFile={coaching.openFile} onChangeStep={setGuideStep} />
+      ) : null}
     </div>
   );
 }

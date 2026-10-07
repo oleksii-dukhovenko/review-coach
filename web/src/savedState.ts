@@ -33,6 +33,8 @@ export type LineComment = {
 
 export type ReviewState = {
   answers: Record<string, QuestionAnswer>;
+  // - "Still fuzzy" chats, keyed by noteChatKey or ideaChatKey.
+  explainChats: Record<string, { explanation: string; followUps?: Exchange[] }>;
   lineComments: LineComment[];
   // - File path to the diff fingerprint you reviewed.
   reviewedFiles: Record<string, string>;

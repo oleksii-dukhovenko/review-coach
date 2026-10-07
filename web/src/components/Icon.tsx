@@ -4,6 +4,7 @@ const PATHS = {
   question: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01",
   arrowRight: "M5 12h14M12 5l7 7-7 7",
   arrowLeft: "M19 12H5M12 19l-7-7 7-7",
+  arrowUp: "M12 19V5M5 12l7-7 7 7",
   file: "M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2zM14 2v6h6",
   check: "M20 6 9 17l-5-5",
   map: "M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15",

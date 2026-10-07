@@ -773,3 +773,30 @@ div.step-code { padding: 10px; }
 .file-chip-flag { font-family: var(--sans); font-size: 11px; font-weight: 600; color: var(--important); }
 .step-more { margin-top: 8px; padding: 8px 12px; background: var(--surface-muted); border-radius: var(--radius-small); font-size: 14px; }
 .step-file-notes { margin: 6px 0 0; padding-left: 18px; color: var(--text-muted); }
+
+/* Guide bar while working through a step */
+.guide-dock {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 30;
+  width: min(1100px, calc(100vw - 32px)); display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 10px 12px 10px 14px; background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: 14px; box-shadow: var(--shadow-lifted);
+}
+.dock-step { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.dock-number {
+  width: 28px; height: 28px; flex: none; border-radius: 999px; display: grid; place-items: center;
+  background: var(--accent); color: #fff; font-weight: 700; font-size: 13px;
+}
+.dock-number.is-done { background: var(--good); }
+.dock-title { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.dock-title strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 32ch; }
+.dock-files { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; min-width: 0; }
+.dock-file {
+  font-family: var(--mono); font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 999px;
+  box-shadow: none; background: var(--surface-muted); border-color: transparent;
+}
+.dock-file.is-reviewed { color: var(--good); background: var(--good-soft); }
+.dock-file.is-current { border-color: var(--accent); color: var(--accent); }
+.dock-dot { width: 7px; height: 7px; border-radius: 999px; border: 1.5px solid currentColor; }
+.dock-actions { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+.dock-done { color: var(--good); font-weight: 600; display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
+.review-main { padding-bottom: 72px; }
