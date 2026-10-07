@@ -81,13 +81,13 @@ sdks:
 
 describe("withHouseStyle", () => {
   it("adds colors to flowcharts and drops click lines", () => {
-    const styled = withHouseStyle('flowchart LR\n  A["Page"]:::changed --> B\n  click A "https://example.com"', false);
+    const styled = withHouseStyle('flowchart LR\n  A["Page"]:::changed --> B\n  click A "https://example.com"');
     expect(styled).toContain("classDef changed");
     expect(styled).not.toContain("click A");
   });
 
   it("leaves other diagram kinds alone", () => {
-    expect(withHouseStyle("sequenceDiagram\n  A->>B: hi", false)).toBe("sequenceDiagram\n  A->>B: hi");
+    expect(withHouseStyle("sequenceDiagram\n  A->>B: hi")).toBe("sequenceDiagram\n  A->>B: hi");
   });
 });
 

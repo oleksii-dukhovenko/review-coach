@@ -13,12 +13,7 @@ type FlowStep = Walkthrough["flow"][number];
 
 type OpenLine = (file: string, line: number, side: "LEFT" | "RIGHT") => void;
 
-/** Walkthroughs built before tldr existed lead with their first sentence. */
-function tldrOf(story: Story): string {
-  return story.tldr || story.whatItDoes.split(/(?<=\.)\s/)[0];
-}
-
-function GlossaryTerm({ entry }: { entry: Story["glossary"][number] }) {
+export function GlossaryTerm({ entry }: { entry: Story["glossary"][number] }) {
   return (
     <span className="term" tabIndex={0}>
       {entry.term}
@@ -27,7 +22,7 @@ function GlossaryTerm({ entry }: { entry: Story["glossary"][number] }) {
   );
 }
 
-function BeforeAfter({ story }: { story: Story }) {
+export function BeforeAfter({ story }: { story: Story }) {
   if (!story.before || !story.after) return null;
   return (
     <div className="before-after">
@@ -65,29 +60,6 @@ export function ChangesBanner({ change, onOpenFile }: { change: WalkthroughChang
         Commits <span className="mono">{shortSha(change.fromSha)}</span> → <span className="mono">{shortSha(change.toSha)}</span>.
         Everything else, and your answers and checkmarks, were kept.
       </div>
-    </section>
-  );
-}
-
-export function AtAGlance({ story }: { story: Story }) {
-  return (
-    <section id="glance" className="glance">
-      <div className="eyebrow"><Icon name="eye" /> At a glance</div>
-      <p className="tldr">{tldrOf(story)}</p>
-      <BeforeAfter story={story} />
-      {story.glossary.length > 0 ? (
-        <div className="glossary-row">
-          <span className="small muted">Words you'll see (hover):</span>
-          {story.glossary.map((entry) => <GlossaryTerm key={entry.term} entry={entry} />)}
-        </div>
-      ) : null}
-      <details className="more">
-        <summary>The full story</summary>
-        <h3>What it does</h3>
-        <Markdown text={story.whatItDoes} />
-        <h3>Why it's needed</h3>
-        <Markdown text={story.whyNeeded} />
-      </details>
     </section>
   );
 }
@@ -255,8 +227,4 @@ export function RemovedCodeSection({ removed }: { removed: RemovedSymbol[] }) {
       {removed.map((symbol) => <RemovedSymbolCard key={`${symbol.file}:${symbol.name}`} symbol={withCounts(symbol)} />)}
     </section>
   );
-}
-
-export function skimFiles(files: DiffFile[]): DiffFile[] {
-  return files.filter((file) => file.tag === "skim");
 }

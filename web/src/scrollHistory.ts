@@ -7,10 +7,10 @@ const SAVE_DELAY_MS = 200;
 const PROBE_FROM_TOP_PX = 120;
 
 function selectorFor(element: Element): string | undefined {
-  const codeCell = element.closest("tr")?.querySelector<HTMLElement>("td.code[data-file]");
+  const codeCell = element.closest("tr, .fig-row")?.querySelector<HTMLElement>(".code[data-file]");
   if (codeCell) {
     const { file, line, side } = codeCell.dataset;
-    return `td.code[data-file="${CSS.escape(file ?? "")}"][data-line="${line}"][data-side="${side}"]`;
+    return `.code[data-file="${CSS.escape(file ?? "")}"][data-line="${line}"][data-side="${side}"]`;
   }
   const withId = element.closest("[id]");
   return withId?.id ? `#${CSS.escape(withId.id)}` : undefined;

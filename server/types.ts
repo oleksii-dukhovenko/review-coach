@@ -27,6 +27,8 @@ export type PullRequest = {
   baseRef: string;
   additions: number;
   deletions: number;
+  // - Missing on PRs saved before it was fetched.
+  createdAt?: string;
   updatedAt: string;
   openThreads: ReviewThread[];
 };
