@@ -41,7 +41,7 @@ const note = { line: 12, endLine: 12, side: "RIGHT" as const, kind: "syntax" as 
 const data: WalkthroughData = {
   walkthrough: {
     story: { tldr: "t", before: "", after: "", whatItDoes: "w", whyNeeded: "n", glossary: [] },
-    picture: { caption: "", diagram: "" },
+    picture: { caption: "", diagram: "", nodes: [] },
     hardIdeas: [{ conceptKey: "k", title: "Rates are floats", oneLiner: "Money as float rounds wrong.", analogy: "", diagram: "", jsExample: "", term: "", file: "order.go", line: 12 }],
     flow: [],
     tour: [{ file: "order.go", whyItMatters: "Adds tax.", notes: [note], questions: [question] }],

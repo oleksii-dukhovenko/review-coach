@@ -1,11 +1,9 @@
 import { useState } from "react";
 
-import type { Concept, DiffFile, HardIdea, PrRoute, RemovedSymbol, Walkthrough, WalkthroughChange } from "../api.ts";
+import type { DiffFile, PrRoute, RemovedSymbol, Walkthrough, WalkthroughChange } from "../api.ts";
 import { Markdown } from "../components/basics.tsx";
-import { StillFuzzyArea, useStillFuzzy, type ExplainChatState } from "../components/ExplainChat.tsx";
 import { FlowDiagram } from "../components/FlowDiagram.tsx";
 import { Icon } from "../components/Icon.tsx";
-import { Mermaid } from "../components/Mermaid.tsx";
 
 type Story = Walkthrough["story"];
 
@@ -59,103 +57,6 @@ export function ChangesBanner({ change, onOpenFile }: { change: WalkthroughChang
       <div className="small muted">
         Commits <span className="mono">{shortSha(change.fromSha)}</span> → <span className="mono">{shortSha(change.toSha)}</span>.
         Everything else, and your answers and checkmarks, were kept.
-      </div>
-    </section>
-  );
-}
-
-function DiagramLegend() {
-  return (
-    <div className="legend small muted">
-      <span><span className="legend-swatch added" /> added by this PR</span>
-      <span><span className="legend-swatch changed" /> changed by this PR</span>
-    </div>
-  );
-}
-
-export function PictureSection({ picture }: { picture: Walkthrough["picture"] | undefined }) {
-  if (!picture?.diagram.trim()) return null;
-  return (
-    <section id="picture">
-      <h2><Icon name="map" /> The big picture</h2>
-      <div className="card picture-card">
-        <div className="small muted">{picture.caption}</div>
-        <Mermaid source={picture.diagram} />
-        <DiagramLegend />
-      </div>
-    </section>
-  );
-}
-
-// - Lets "Still fuzzy" ask Claude for another way in, and keep that chat.
-export type IdeaChats = {
-  route: PrRoute;
-  chats: Record<string, ExplainChatState>;
-  onChatChange: (chatKey: string, chat: ExplainChatState) => void;
-};
-
-type HardIdeaProps = {
-  idea: HardIdea;
-  concept: Concept | undefined;
-  onSave: (status: Concept["status"]) => void;
-  onOpenLine: OpenLine;
-  ideaChats: IdeaChats;
-};
-
-export function ideaChatKey(idea: HardIdea): string {
-  return `idea:${idea.conceptKey}`;
-}
-
-function whatTheIdeaSaid(idea: HardIdea): string {
-  return [idea.oneLiner, idea.analogy && `Like: ${idea.analogy}`, idea.jsExample && `In JS: ${idea.jsExample}`, `Term: ${idea.term}`]
-    .filter(Boolean).join("\n");
-}
-
-function HardIdeaCard({ idea, concept, onSave, onOpenLine, ideaChats }: HardIdeaProps) {
-  const isLearned = concept?.status === "learned";
-  const isFuzzy = concept?.status === "fuzzy";
-  const chatKey = ideaChatKey(idea);
-  const chat = ideaChats.chats[chatKey];
-  const fuzzy = useStillFuzzy({
-    subject: { route: ideaChats.route, file: idea.file, span: { line: idea.line, side: "RIGHT" }, topic: `the idea "${idea.title}"` },
-    alreadySaid: whatTheIdeaSaid(idea), chat, onChatChange: (updated) => ideaChats.onChatChange(chatKey, updated), onMarkFuzzy: () => onSave("fuzzy"),
-  });
-  return (
-    <div className={`idea ${isLearned ? "is-learned" : ""}`}>
-      <div className="idea-title"><Icon name="bulb" /> {idea.title}</div>
-      <p className="idea-one-liner">{idea.oneLiner}</p>
-      {idea.analogy ? <p className="idea-analogy"><span>Like:</span> {idea.analogy}</p> : null}
-      <Mermaid source={idea.diagram} className="small-diagram" />
-      {idea.jsExample ? <pre className="code-block"><span className="code-label">In JS</span>{idea.jsExample}</pre> : null}
-      <div className="idea-footer">
-        <span className="small muted">Term: <strong>{idea.term}</strong></span>
-        <button className="link-button" onClick={() => onOpenLine(idea.file, idea.line, "RIGHT")}>See it in the code <Icon name="arrowRight" size={13} /></button>
-      </div>
-      <div className="button-row">
-        {isLearned ? <span className="chip ready"><Icon name="check" size={12} /> You know this</span> : <button onClick={() => onSave("learned")}>Got it</button>}
-        {isFuzzy ? <span className="chip unsure">Still fuzzy</span> : <button onClick={fuzzy.markFuzzy}>Still fuzzy</button>}
-      </div>
-      <StillFuzzyArea fuzzy={fuzzy} chat={chat} isFuzzy={isFuzzy} />
-    </div>
-  );
-}
-
-export function HardIdeasSection({ ideas, conceptsByKey, onSave, onOpenLine, ideaChats }: {
-  ideas: HardIdea[] | undefined;
-  conceptsByKey: Map<string, Concept>;
-  onSave: (idea: HardIdea, status: Concept["status"]) => void;
-  onOpenLine: OpenLine;
-  ideaChats: IdeaChats;
-}) {
-  if (!ideas?.length) return null;
-  return (
-    <section id="ideas">
-      <h2><Icon name="sparkles" /> Hard ideas, simply</h2>
-      <div className="idea-grid">
-        {ideas.map((idea) => (
-          <HardIdeaCard key={idea.conceptKey} idea={idea} concept={conceptsByKey.get(idea.conceptKey)}
-            onSave={(status) => onSave(idea, status)} onOpenLine={onOpenLine} ideaChats={ideaChats} />
-        ))}
       </div>
     </section>
   );

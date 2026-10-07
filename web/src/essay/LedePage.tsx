@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 
-import type { HardIdea, WalkthroughData } from "../api.ts";
+import type { WalkthroughData } from "../api.ts";
 import { Markdown } from "../components/basics.tsx";
-import { BeforeAfter, ChangesBanner, FlowSection, GlossaryTerm, HardIdeasSection, PictureSection, RemovedCodeSection } from "../pages/WalkthroughSections.tsx";
+import { BeforeAfter, ChangesBanner, FlowSection, GlossaryTerm, RemovedCodeSection } from "../pages/WalkthroughSections.tsx";
+import { ZoomablePicture } from "./PictureZoom.tsx";
 import { attentionItems, type AttentionItem, type EssayStep } from "./model.ts";
-import { hardIdeaAsConcept, type EssayView, type ReviewSession } from "./session.ts";
+import type { EssayView, ReviewSession } from "./session.ts";
 
 type LedeProps = {
   session: ReviewSession;
@@ -83,7 +84,7 @@ function Contents({ steps, data, goTo }: { steps: EssayStep[]; data: Walkthrough
       </div>
       <div className="lede-actions">
         <button className="btn btn-primary" onClick={() => goTo({ kind: "step", index: 0 })}>Start reading →</button>
-        <button className="btn btn-secondary" onClick={() => goTo({ kind: "skim" })}>Skim files instead</button>
+        <button className="btn btn-secondary" onClick={() => goTo({ kind: "files" })}>See all {data.files.length} files</button>
       </div>
     </div>
   );
@@ -91,16 +92,13 @@ function Contents({ steps, data, goTo }: { steps: EssayStep[]; data: Walkthrough
 
 function Background({ session, data }: { session: ReviewSession; data: WalkthroughData }) {
   const { story } = data.walkthrough;
-  const saveIdea = (idea: HardIdea, status: "learned" | "fuzzy") => session.saveConcept(hardIdeaAsConcept(idea), status);
   return (
     <div className="lede-background">
       <h2 className="lede-section-title">Before and after</h2>
       <BeforeAfter story={story} />
       {story.glossary.length ? <div className="glossary-row"><span className="small muted">Words you'll see:</span>{story.glossary.map((entry) => <GlossaryTerm key={entry.term} entry={entry} />)}</div> : null}
       <details className="more"><summary>The full story</summary><Markdown text={story.whatItDoes} /><Markdown text={story.whyNeeded} /></details>
-      <PictureSection picture={data.walkthrough.picture} />
-      <HardIdeasSection ideas={data.walkthrough.hardIdeas} conceptsByKey={session.conceptsByKey} onSave={saveIdea} onOpenLine={session.openLine}
-        ideaChats={{ route: session.route, chats: session.state.explainChats, onChatChange: session.saveExplainChat }} />
+      <ZoomablePicture session={session} data={data} />
       <FlowSection route={session.route} flow={data.walkthrough.flow} files={data.files} onOpenLine={session.openLine} />
       <RemovedCodeSection removed={data.removed} />
     </div>

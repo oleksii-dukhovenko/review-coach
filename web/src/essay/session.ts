@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { api, type Concept, type DiffFile, type HardIdea, type PrPageData, type PrRoute, type Reference, type ReferenceQuery } from "../api.ts";
+import { api, type Concept, type DiffFile, type PrPageData, type PrRoute, type Reference, type ReferenceQuery } from "../api.ts";
 import { spanStart, type LineSpan } from "../../../server/anchors.ts";
 import type { ExplainChatState } from "../components/ExplainChat.tsx";
 import { useFileViewer } from "../components/FileViewer.tsx";
@@ -11,7 +11,7 @@ import { useSavedState, type LineComment, type QuestionAnswer, type ReviewState 
 import { addHistoryStep } from "../scrollHistory.ts";
 import { stepOfFile, type EssayStep } from "./model.ts";
 
-export type EssayView = { kind: "lede" } | { kind: "step"; index: number } | { kind: "finish" } | { kind: "skim" };
+export type EssayView = { kind: "lede" } | { kind: "step"; index: number } | { kind: "finish" } | { kind: "files" };
 
 export const DEFAULT_REVIEW_STATE: ReviewState = {
   answers: {}, explainChats: {}, lineComments: [], reviewedFiles: {}, summary: "", verdict: null, postedUrl: null,
@@ -20,11 +20,6 @@ export const DEFAULT_REVIEW_STATE: ReviewState = {
 type ReviewStateSetter = (update: (current: ReviewState) => ReviewState) => void;
 
 export type ConceptSource = { conceptKey: string; title: string; explanation: string; jsExample: string };
-
-export function hardIdeaAsConcept(idea: HardIdea): ConceptSource {
-  const explanation = [idea.oneLiner, idea.analogy && `Like: ${idea.analogy}`, `Term: ${idea.term}`].filter(Boolean).join("\n\n");
-  return { conceptKey: idea.conceptKey, title: idea.title, explanation, jsExample: idea.jsExample };
-}
 
 /** Where a multi-line comment starts, with that line's code so it can follow it. */
 function rangeStartOf(files: DiffFile[], file: string, span: LineSpan): Partial<LineComment> {

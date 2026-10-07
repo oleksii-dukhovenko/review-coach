@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { DiffFile, DiffLine } from "../api.ts";
 import { linesInSpan, spanBetween, type LinePoint, type LineSpan } from "../../../server/anchors.ts";
@@ -12,6 +12,7 @@ import type { PlacedComment } from "../placeComments.ts";
 import { Composer } from "./Composer.tsx";
 import { anchorLine, foldRows, isLineAt, type Figure, type ShownRow } from "./model.ts";
 import type { ReviewSession } from "./session.ts";
+import { splitShownRows, type SplitRow } from "./splitRows.ts";
 
 type FigureProps = {
   figure: Figure;
@@ -22,8 +23,6 @@ type FigureProps = {
   hoveredNote: number | null;
   onHoverNote: (number: number | null) => void;
 };
-
-const SIGN = { add: "+", del: "−", ctx: "" } as const;
 
 function lineKey(point: LinePoint): string {
   return `${point.side}:${point.line}`;
@@ -60,37 +59,42 @@ function hasSelectedText(): boolean {
   return (window.getSelection()?.toString() ?? "") !== "";
 }
 
-type RowProps = {
-  line: DiffLine;
+type LineMarks = {
   props: FigureProps;
-  draft: PlacedComment | undefined;
-  isPicked: boolean;
-  isComment: boolean;
+  drafts: Map<string, PlacedComment>;
+  pickedLines: Set<DiffLine>;
+  commentOf: Map<DiffLine, boolean>;
   picking: ReturnType<typeof useLinePicking>;
 };
 
-function rowClassOf({ line, props, draft, isPicked }: RowProps): string {
-  const footnote = props.footnoteAt(line);
-  const classes = ["fig-row", `is-${line.kind}`];
+type HalfSide = "left" | "right";
+
+function halfClassOf(line: DiffLine, marks: LineMarks): string {
+  const footnote = marks.props.footnoteAt(line);
+  const classes = ["fig-half", `is-${line.kind}`];
   if (footnote !== undefined) classes.push("is-key");
-  if (footnote !== undefined && footnote === props.hoveredNote) classes.push("is-hovered");
-  if (draft) classes.push("has-draft");
-  if (isPicked) classes.push("is-picked");
+  if (footnote !== undefined && footnote === marks.props.hoveredNote) classes.push("is-hovered");
+  if (marks.drafts.has(lineKey(lineRefOf(line)))) classes.push("has-draft");
+  if (marks.pickedLines.has(line)) classes.push("is-picked");
   return classes.join(" ");
 }
 
-function CodeRow(rowProps: RowProps) {
-  const { line, props, draft, picking } = rowProps;
+function numberOn(line: DiffLine, side: HalfSide): number | null {
+  return side === "left" ? line.oldLine : line.newLine;
+}
+
+/** One side of a row: gutter, line number, code. */
+function HalfLine({ line, side, marks }: { line: DiffLine | undefined; side: HalfSide; marks: LineMarks }) {
+  if (!line) return <div className="fig-half is-empty" />;
+  const { props, picking } = marks;
   const point = lineRefOf(line);
-  const footnote = props.footnoteAt(line);
-  const openComposer = () => props.session.setComposer({ file: props.figure.file, ...point });
-  const clickRow = (event: React.MouseEvent<HTMLElement>) => {
+  const clickCode = (event: React.MouseEvent<HTMLElement>) => {
     if (isPeekClick(event)) {
       const clicked = wordAtClick(event, line.text);
       if (clicked) props.session.setPeek({ file: props.figure.file, ...clicked, ...point });
       return;
     }
-    if (!hasSelectedText()) openComposer();
+    if (!hasSelectedText()) props.session.setComposer({ file: props.figure.file, ...point });
   };
   const startPick = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -98,17 +102,41 @@ function CodeRow(rowProps: RowProps) {
     picking.start(point, event.shiftKey);
   };
   return (
-    <div className={rowClassOf(rowProps)} onMouseEnter={() => picking.extend(point)}
-      id={footnote !== undefined ? noteRowId(stepIndexOf(props.figure), footnote) : undefined}
-      onMouseOver={() => footnote !== undefined && props.onHoverNote(footnote)} onMouseOut={() => footnote !== undefined && props.onHoverNote(null)}>
+    <div className={halfClassOf(line, marks)} onMouseEnter={() => picking.extend(point)}>
       <span className="fig-gutter" onMouseDown={startPick} title="Click to comment. Drag, or Shift+click, for several lines.">
-        {draft ? <Icon name="message" size={15} /> : null}
+        {marks.drafts.has(lineKey(point)) ? <Icon name="message" size={15} /> : null}
       </span>
-      <span className="fig-number" onMouseDown={startPick}>{line.kind === "del" ? line.oldLine : line.newLine}</span>
-      <span className="fig-sign">{SIGN[line.kind]}</span>
-      <span className="code" onClick={clickRow} data-file={props.figure.file} data-line={point.line} data-side={point.side}
-        dangerouslySetInnerHTML={{ __html: renderCodeLine(line.text, languageForFile(props.figure.file), rowProps.isComment) || " " }} />
+      <span className="fig-number" onMouseDown={startPick}>{numberOn(line, side)}</span>
+      <span className="code" onClick={clickCode} data-file={props.figure.file} data-line={point.line} data-side={point.side}
+        dangerouslySetInnerHTML={{ __html: renderCodeLine(line.text, languageForFile(props.figure.file), marks.commentOf.get(line) ?? false) || " " }} />
     </div>
+  );
+}
+
+function linesOf(row: SplitRow): DiffLine[] {
+  return [row.left, row.right].filter((line, lineIndex, lines): line is DiffLine => line !== undefined && lines.indexOf(line) === lineIndex);
+}
+
+function footnoteOfRow(row: SplitRow, props: FigureProps): number | undefined {
+  return linesOf(row).map(props.footnoteAt).find((footnote) => footnote !== undefined);
+}
+
+/** Old code on the left, new code on the right. */
+function SplitRowView({ row, marks }: { row: SplitRow; marks: LineMarks }) {
+  const { props } = marks;
+  const footnote = footnoteOfRow(row, props);
+  const hoverNote = (number: number | null) => footnote !== undefined && props.onHoverNote(number);
+  return (
+    <>
+      <div className="fig-row" id={footnote !== undefined ? noteRowId(stepIndexOf(props.figure), footnote) : undefined}
+        onMouseOver={() => hoverNote(footnote!)} onMouseOut={() => hoverNote(null)}>
+        <HalfLine line={row.left} side="left" marks={marks} />
+        <HalfLine line={row.right} side="right" marks={marks} />
+      </div>
+      {linesOf(row).map((line) => (
+        <BelowRow key={lineKey(lineRefOf(line))} line={line} props={props} draft={marks.drafts.get(lineKey(lineRefOf(line)))} />
+      ))}
+    </>
   );
 }
 
@@ -117,7 +145,7 @@ const FOLD_WORD = { comment: "comment ", unchanged: "unchanged ", far: "more " }
 function FoldRow({ count, reason, onOpen }: { count: number; reason: keyof typeof FOLD_WORD; onOpen: () => void }) {
   return (
     <button className="fig-fold" onClick={onOpen}>
-      <span /><span className="fig-number">⋯</span><span />
+      <span className="fig-number">⋯</span>
       <span>{count} {FOLD_WORD[reason]}line{count === 1 ? "" : "s"} folded — show</span>
     </button>
   );
@@ -163,37 +191,39 @@ function captionRange(figure: Figure): string {
   return figure.firstLine === figure.lastLine ? `line ${figure.firstLine}` : `lines ${figure.firstLine}–${figure.lastLine}`;
 }
 
-/** A slice of the diff as a numbered figure: click a line to comment, Ctrl+click a name to see its uses. */
-export function CodeFigure(props: FigureProps) {
+function rowKey(row: SplitRow): string {
+  return linesOf(row).map((line) => `${line.kind}:${line.oldLine}:${line.newLine}`).join("|");
+}
+
+function useFigureMarks(props: FigureProps): LineMarks {
   const { figure, session } = props;
-  const [openFolds, setOpenFolds] = useState<Set<string>>(new Set());
-  const [isFull, setIsFull] = useState(false);
   const drafts = draftsByLine(session.lineComments, figure.file);
   const picking = useLinePicking(props.diff, (span) => session.setComposer({ file: figure.file, ...span }));
   const pickedLines = new Set(picking.dragSpan ? linesInSpan(props.diff, picking.dragSpan) : []);
   const isComment = commentFlags(figure.lines.map((line) => line.text), figure.file);
   const commentOf = new Map(figure.lines.map((line, lineIndex) => [line, isComment[lineIndex]]));
-  const rows: ShownRow[] = isFull ? figure.lines.map((line) => ({ kind: "line", line })) : foldRows(figure, isPinnedBy(props, drafts));
+  return { props, drafts, pickedLines, commentOf, picking };
+}
+
+/** A slice of the diff as a numbered figure: click a line to comment, Ctrl+click a name to see its uses. */
+export function CodeFigure(props: FigureProps) {
+  const { figure } = props;
+  const [openFolds, setOpenFolds] = useState<Set<string>>(new Set());
+  const [isFull, setIsFull] = useState(false);
+  const marks = useFigureMarks(props);
+  const rows: ShownRow[] = isFull ? figure.lines.map((line) => ({ kind: "line", line })) : foldRows(figure, isPinnedBy(props, marks.drafts));
+  const items = splitShownRows(rows, openFolds);
   const openFold = (id: string) => setOpenFolds((current) => new Set(current).add(id));
-  const hasFolds = rows.some((row) => row.kind === "fold");
-  const renderLine = (line: DiffLine) => {
-    const draft = drafts.get(lineKey(lineRefOf(line)));
-    return (
-      <Fragment key={`${line.oldLine}:${line.newLine}:${line.kind}`}>
-        <CodeRow line={line} props={props} draft={draft} isPicked={pickedLines.has(line)} isComment={commentOf.get(line) ?? false} picking={picking} />
-        <BelowRow line={line} props={props} draft={draft} />
-      </Fragment>
-    );
-  };
+  const hasFolds = items.some((item) => item.kind === "fold");
   return (
     <figure className="code-figure" id={figure.id}>
       <div className="fig-body">
-        {rows.map((row) => (row.kind === "line" ? renderLine(row.line)
-          : openFolds.has(row.id) ? row.lines.map(renderLine)
-            : <FoldRow key={row.id} count={row.lines.length} reason={row.reason} onOpen={() => openFold(row.id)} />))}
+        {items.map((item) => (item.kind === "pair"
+          ? <SplitRowView key={rowKey(item.row)} row={item.row} marks={marks} />
+          : <FoldRow key={item.id} count={item.lines.length} reason={item.reason} onOpen={() => openFold(item.id)} />))}
       </div>
       <figcaption>
-        <span>Fig. {figure.number} — {figure.file.split("/").at(-1)}, {captionRange(figure)}{hasFolds ? " (some lines folded)" : ""} · hover a line for <span className="accent-text">+</span>, click to comment</span>
+        <span>{figure.number ? `Fig. ${figure.number} — ` : ""}{figure.file.split("/").at(-1)}, {captionRange(figure)}{hasFolds ? " (some lines folded)" : ""} · old on the left, new on the right · click a line to comment or ask</span>
         <button className="text-link" onClick={() => setIsFull(!isFull)}>{isFull ? "Fold again" : "Open full diff"}</button>
       </figcaption>
     </figure>

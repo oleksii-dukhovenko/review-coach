@@ -2,11 +2,11 @@ import { useEffect, useMemo, type ReactNode } from "react";
 
 import type { Guide, PrPageData, PrRoute, WalkthroughData } from "../api.ts";
 import { FileViewer } from "../components/FileViewer.tsx";
-import { CodeFigure } from "./CodeFigure.tsx";
+import { FilesPage } from "./FilesPage.tsx";
 import { LedePage } from "./LedePage.tsx";
 import { buildSteps, type EssayStep } from "./model.ts";
 import { YourReview } from "./ReviewMargin.tsx";
-import { fileAnchorId, useReviewSession, type EssayView, type ReviewSession } from "./session.ts";
+import { useReviewSession, type EssayView, type ReviewSession } from "./session.ts";
 import { Rail, StepPage } from "./StepPage.tsx";
 
 type EssayReviewProps = {
@@ -45,31 +45,6 @@ function FinishPage({ session, data, steps, goTo, canPost }: { session: ReviewSe
   );
 }
 
-function SkimPage({ session, data, steps, goTo }: { session: ReviewSession; data: WalkthroughData; steps: EssayStep[]; goTo: (view: EssayView) => void }) {
-  const files = steps.flatMap((step) => step.files).filter((file) => file.diff);
-  return (
-    <div className="essay-step">
-      <Rail session={session} steps={steps} place={{ isSkim: true }} goTo={goTo} />
-      <article className="essay-article">
-        <div className="small-caps">Skim</div>
-        <h1 className="essay-title">Every file, plain diff</h1>
-        <p className="essay-p">No notes or questions, just the changes in step order. {data.files.length} files.</p>
-        {files.map((file) => (
-          <section key={file.path} className="essay-file" id={fileAnchorId(file.path)}>
-            <label className="file-check">
-              <input type="checkbox" checked={session.statusOf(file.diff!) === "reviewed"} onChange={() => session.toggleReviewed(file.diff!)} />
-              <span className="mono">{file.path}</span>
-            </label>
-            {file.figures.map((figure) => (
-              <CodeFigure key={figure.id} figure={figure} diff={file.diff!} session={session} footnoteAt={() => undefined} hoveredNote={null} onHoverNote={() => undefined} />
-            ))}
-          </section>
-        ))}
-      </article>
-    </div>
-  );
-}
-
 function clampView(view: EssayView, steps: EssayStep[]): EssayView {
   if (view.kind !== "step") return view;
   return view.index >= 0 && view.index < steps.length ? view : { kind: "lede" };
@@ -92,7 +67,7 @@ export function EssayReview({ route, page, view, goTo, actions, extra }: EssayRe
       {shown.kind === "lede" ? <LedePage session={session} data={data} steps={steps} goTo={goTo} actions={actions} extra={extra} /> : null}
       {shown.kind === "step" ? <StepPage session={session} data={data} steps={steps} step={steps[shown.index]} goTo={goTo} canPost={canPost} /> : null}
       {shown.kind === "finish" ? <FinishPage session={session} data={data} steps={steps} goTo={goTo} canPost={canPost} /> : null}
-      {shown.kind === "skim" ? <SkimPage session={session} data={data} steps={steps} goTo={goTo} /> : null}
+      {shown.kind === "files" ? <FilesPage session={session} data={data} steps={steps} goTo={goTo} /> : null}
       <FileViewer route={route} viewer={session.viewer} />
     </>
   );

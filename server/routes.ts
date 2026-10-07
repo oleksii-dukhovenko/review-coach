@@ -3,9 +3,11 @@ import { streamSSE } from "hono/streaming";
 
 import { answerQuestion, type Question } from "./ask.ts";
 import { listConcepts, saveConcept, type Concept } from "./concepts.ts";
+
 import { getJob, getPr, getReviewState, getSetting, listAsks, listInboxPrs, saveReviewState } from "./db.ts";
 import { isAutoUpdateOn, refreshAndRecord, setAutoUpdate } from "./inbox.ts";
 import { combinedStatus, isOutOfDate, mainJobKinds, needsPreparing, type MainJobKind } from "./jobKinds.ts";
+import { pictureNodes } from "./pictureMap.ts";
 import { replyToThread, submitReview, type ReviewSubmission } from "./posting.ts";
 import { enqueue, isPaused, resumeQueue } from "./queue.ts";
 import { findReferences, isIdentifier, readFileView, readSnippet, warmUpForPr, type ReferenceQuery } from "./references.ts";
@@ -172,6 +174,8 @@ export function buildRoutes(): Hono {
     const line = Number(context.req.query("line"));
     return context.json(await readSnippet(requirePr(context), file, line, 7));
   });
+
+  api.post(`${prPath}/picture-nodes`, async (context) => context.json(await pictureNodes(requirePr(context).key)));
 
   api.get("/concepts", (context) => context.json(listConcepts()));
 

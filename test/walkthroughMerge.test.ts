@@ -56,7 +56,7 @@ function stopFor(file: string, questionIds: string[], line: number): TourStop {
 function previousWith(file: DiffFile, stop: TourStop): MergeableData {
   const walkthrough = {
     story: { tldr: "t", before: "", after: "", whatItDoes: "w", whyNeeded: "n", glossary: [] },
-    picture: { caption: "", diagram: "" }, hardIdeas: [], flow: [], tour: [stop],
+    picture: { caption: "", diagram: "", nodes: [] }, hardIdeas: [], flow: [], tour: [stop],
   } satisfies Walkthrough;
   return { walkthrough, files: [file], removed: [] };
 }

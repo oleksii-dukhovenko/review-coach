@@ -25,6 +25,8 @@ const PHOSPHOR = {
   refresh: "arrow-clockwise",
   github: "github-logo",
   plus: "plus",
+  files: "files",
+  magnifyPlus: "magnifying-glass-plus",
 } as const;
 
 export type IconName = keyof typeof PHOSPHOR;

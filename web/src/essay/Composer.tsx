@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { askQuestion } from "../api.ts";
 import { spanLabel } from "../../../server/anchors.ts";
-import { AskBox } from "../components/AskBox.tsx";
+import { PastExchange, useLineAsk } from "../components/AskBox.tsx";
 import type { ComposerTarget, ReviewSession } from "./session.ts";
 
 const SOFTEN_PROMPT = [
@@ -52,7 +52,7 @@ function useRewrite(session: ReviewSession, target: ComposerTarget, text: string
   return { pending, error, canUndo: undoText !== null, run, undo };
 }
 
-function CoachLinks({ rewrite, hasText, onAsk }: { rewrite: ReturnType<typeof useRewrite>; hasText: boolean; onAsk: () => void }) {
+function CoachLinks({ rewrite, hasText }: { rewrite: ReturnType<typeof useRewrite>; hasText: boolean }) {
   if (rewrite.pending) return <span className="composer-coach">Rewriting…</span>;
   return (
     <span className="composer-coach">
@@ -63,19 +63,14 @@ function CoachLinks({ rewrite, hasText, onAsk }: { rewrite: ReturnType<typeof us
           <button className="text-link" disabled={!hasText} onClick={() => void rewrite.run(option)}>{option.label}</button>
         </span>
       ))}
-      {" · "}<button className="text-link" onClick={onAsk}>ask about this line</button>
       {rewrite.canUndo ? <>{" · "}<button className="text-link" onClick={rewrite.undo}>undo</button></> : null}
     </span>
   );
 }
 
-/** Opens under a line: write a review comment, let the coach rewrite it, or ask about the line. */
-export function Composer({ session, target, draftId, initialText = "" }: ComposerProps) {
-  const [text, setText] = useState(initialText);
-  const [isAsking, setIsAsking] = useState(false);
-  const rewrite = useRewrite(session, target, text, setText);
+function useDraftActions(session: ReviewSession, target: ComposerTarget, draftId: string | undefined) {
   const close = () => session.setComposer(null);
-  const save = () => {
+  const save = (text: string) => {
     if (draftId) session.updateLineComment(draftId, text.trim());
     else session.addLineComment(target.file, target, text.trim());
     close();
@@ -84,19 +79,37 @@ export function Composer({ session, target, draftId, initialText = "" }: Compose
     if (draftId) session.removeLineComment(draftId);
     close();
   };
-  if (isAsking) {
-    const pastAsks = session.asks.filter((ask) => ask.file === target.file && ask.line === target.line);
-    return <div className="composer"><AskBox route={session.route} file={target.file} span={target} pastAsks={pastAsks} onClose={() => setIsAsking(false)} /></div>;
-  }
+  return { close, save, remove };
+}
+
+function pastAsksAt(session: ReviewSession, target: ComposerTarget) {
+  return session.asks.filter((ask) => ask.file === target.file && ask.line === target.line);
+}
+
+/** Opens under a line: one box, either a review comment or a question for Claude. */
+export function Composer({ session, target, draftId, initialText = "" }: ComposerProps) {
+  const [text, setText] = useState(initialText);
+  const rewrite = useRewrite(session, target, text, setText);
+  const draft = useDraftActions(session, target, draftId);
+  const lineAsk = useLineAsk({ route: session.route, file: target.file, span: target, pastAsks: pastAsksAt(session, target) });
+  const isBusy = rewrite.pending !== null || lineAsk.isAsking;
+  const hasText = text.trim() !== "";
+  const askClaude = () => {
+    void lineAsk.ask(text.trim());
+    setText("");
+  };
   return (
     <div className="composer" onClick={(event) => event.stopPropagation()}>
+      {lineAsk.exchanges.map((exchange, exchangeIndex) => <PastExchange key={exchangeIndex} exchange={exchange} />)}
+      {lineAsk.error ? <div className="composer-error">Claude could not answer: {lineAsk.error}</div> : null}
       <textarea className="input" autoFocus disabled={rewrite.pending !== null} value={text} onChange={(event) => setText(event.target.value)}
-        placeholder={`Your comment on line ${spanLabel(target)}. It goes in your review; nothing is posted yet.`} />
+        placeholder={`Line ${spanLabel(target)}: write a review comment, or a question for Claude.`} />
       <div className="composer-actions">
-        <button className="btn btn-primary btn-small" disabled={!text.trim() || rewrite.pending !== null} onClick={save}>{draftId ? "Save" : "Add to review"}</button>
-        <button className="btn btn-ghost btn-small btn-quiet" onClick={close}>Cancel</button>
-        {draftId ? <button className="btn btn-ghost btn-small btn-quiet" onClick={remove}>Remove</button> : null}
-        <CoachLinks rewrite={rewrite} hasText={text.trim() !== ""} onAsk={() => setIsAsking(true)} />
+        <button className="btn btn-primary btn-small" disabled={!hasText || isBusy} onClick={() => draft.save(text)}>{draftId ? "Save" : "Add to review"}</button>
+        <button className="btn btn-secondary btn-small" disabled={!hasText || isBusy} onClick={askClaude}>{lineAsk.isAsking ? "Claude is thinking…" : "Ask Claude"}</button>
+        <button className="btn btn-ghost btn-small btn-quiet" onClick={draft.close}>Cancel</button>
+        {draftId ? <button className="btn btn-ghost btn-small btn-quiet" onClick={draft.remove}>Remove</button> : null}
+        <CoachLinks rewrite={rewrite} hasText={hasText} />
       </div>
       {rewrite.error ? <div className="composer-error">Could not rewrite: {rewrite.error}</div> : null}
     </div>

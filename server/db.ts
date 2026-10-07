@@ -176,6 +176,11 @@ export function saveFinishedJob(job: FinishedJob): void {
   if (replacesAskContext) database.prepare("DELETE FROM ask_sessions WHERE pr_key = ?").run(job.prKey);
 }
 
+/** Replaces a finished job's data, keeping its build time. */
+export function saveJobData(prKey: string, kind: JobKind, data: unknown): void {
+  database.prepare("UPDATE jobs SET data = ? WHERE pr_key = ? AND kind = ?").run(JSON.stringify(data), prKey, kind);
+}
+
 export function getReviewState(prKey: string): unknown {
   const row = database.prepare("SELECT data FROM review_states WHERE pr_key = ?").get(prKey) as { data: string } | undefined;
   return row ? JSON.parse(row.data) : {};

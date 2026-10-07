@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 // - Keep in sync with --added / --changed in styles.css.
 const HOUSE_CLASSES = [
@@ -47,9 +47,43 @@ function loadMermaid() {
 
 type RenderState = { svg: string } | { error: string } | undefined;
 
+export type NodeChange = "added" | "changed" | "existing";
+
+export type ClickedNode = { id: string; label: string; change: NodeChange; element: Element };
+
+const NODE_ID = /-flowchart-(.+)-\d+$/;
+
+function changeOf(element: Element): NodeChange {
+  if (element.classList.contains("added")) return "added";
+  return element.classList.contains("changed") ? "changed" : "existing";
+}
+
+function clickedNodeOf(element: Element): ClickedNode | null {
+  const id = element.id.match(NODE_ID)?.[1];
+  return id ? { id, label: element.textContent?.trim() ?? id, change: changeOf(element), element } : null;
+}
+
+/** Lets each flowchart box be clicked once the SVG is on the page. */
+function useNodeClicks(container: React.RefObject<HTMLDivElement | null>, svg: string | undefined, onNodeClick?: (node: ClickedNode) => void) {
+  useEffect(() => {
+    const element = container.current;
+    if (!element || !onNodeClick) return;
+    const handleClick = (event: MouseEvent) => {
+      const nodeElement = (event.target as Element).closest("g.node");
+      const clicked = nodeElement ? clickedNodeOf(nodeElement) : null;
+      if (clicked) onNodeClick(clicked);
+    };
+    element.addEventListener("click", handleClick);
+    return () => element.removeEventListener("click", handleClick);
+  }, [svg, onNodeClick]);
+}
+
+type MermaidProps = { source: string; className?: string; onNodeClick?: (node: ClickedNode) => void };
+
 /** Draws a Mermaid diagram; shows nothing if it cannot. */
-export function Mermaid({ source, className = "" }: { source: string; className?: string }) {
+export function Mermaid({ source, className = "", onNodeClick }: MermaidProps) {
   const diagramId = `diagram-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const container = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<RenderState>();
   useEffect(() => {
     if (!source.trim()) return;
@@ -57,7 +91,9 @@ export function Mermaid({ source, className = "" }: { source: string; className?
       .then((mermaid) => mermaid.render(diagramId, withHouseStyle(source)))
       .then(({ svg }) => setState({ svg }), (error: Error) => setState({ error: error.message }));
   }, [source]);
+  useNodeClicks(container, state && "svg" in state ? state.svg : undefined, onNodeClick);
   if (!source.trim() || !state) return null;
   if ("error" in state) return <details className="diagram-error small muted"><summary>The picture could not be drawn</summary><pre>{source}</pre></details>;
-  return <div className={`diagram ${className}`} dangerouslySetInnerHTML={{ __html: state.svg }} />;
+  const zoomClass = onNodeClick ? "is-zoomable" : "";
+  return <div ref={container} className={`diagram ${zoomClass} ${className}`} dangerouslySetInnerHTML={{ __html: state.svg }} />;
 }

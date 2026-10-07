@@ -62,6 +62,7 @@ export function walkthroughPrompt(input: WalkthroughInput): string {
     `## What to produce
 - story: tldr first, then before/after as a person would see it, then what and why. Domain nouns in the glossary.
 - picture: one small diagram of the parts this PR touches. Mark added and changed parts.
+  For each box, name the file and line range of the function or block it stands for.
 - hardIdeas: the few ideas that are hardest to grasp here (syntax, pattern, or design). One-line answer, one-line analogy,
   a tiny diagram only when it shows something words cannot, a JS one-liner when one exists.
 - flow: the run as a hand-off story, entry point first, max 8 steps. Each step names its actor (the part of the system
@@ -187,4 +188,19 @@ ${input.code}
 Their question: ${input.question}
 
 Answer in plain markdown. Short. Read the code if you need to.`;
+}
+
+type PictureMapInput = { caption: string; diagram: string; files: DiffFile[] };
+
+/** Asks where each box of the big-picture diagram lives in the code. */
+export function pictureMapPrompt(input: PictureMapInput): string {
+  return [
+    "This diagram shows the parts a pull request touches. The checkout is the PR head.",
+    "For every node in the diagram, find the function or block of code that box stands for. Read the files to get the lines right.",
+    "Give the node id exactly as in the Mermaid source, the repo path, and the first and last line of that function or block.",
+    "If a box is not code in this repo (a person, a device, a third-party service), give an empty file and 0 for both lines.",
+    untrustedBlock("caption", input.caption),
+    untrustedBlock("diagram", input.diagram),
+    `## Files this PR changes\n${input.files.map((file) => `- ${file.path}`).join("\n")}`,
+  ].join("\n\n");
 }

@@ -9,25 +9,28 @@ import { useScrollHistory } from "./scrollHistory.ts";
 import "./broadsheet.css";
 import "./styles.css";
 
+// - A tab left open across a rebuild asks for old chunks; reload once.
+window.addEventListener("vite:preloadError", () => window.location.reload());
+
 function routeFromHash(hash: string): PrRoute | undefined {
   const match = hash.match(/^#\/pr\/([^/]+)\/([^/]+)\/(\d+)/);
   return match ? { owner: match[1], repo: match[2], number: Number(match[3]) } : undefined;
 }
 
-/** The part after the PR: the lede, a step (1-based in the address), Finish, or Skim. */
+/** The part after the PR: the lede, a step (1-based in the address), Finish, or all files. */
 export function viewFromHash(hash: string): EssayView {
   const rest = hash.replace(/^#\/pr\/[^/]+\/[^/]+\/\d+/, "");
   const step = rest.match(/^\/step\/(\d+)/);
   if (step) return { kind: "step", index: Number(step[1]) - 1 };
   if (rest.startsWith("/finish")) return { kind: "finish" };
-  if (rest.startsWith("/skim")) return { kind: "skim" };
+  if (rest.startsWith("/files") || rest.startsWith("/skim")) return { kind: "files" };
   return { kind: "lede" };
 }
 
 export function hashFor(route: PrRoute, view: EssayView): string {
   const base = `#/pr/${route.owner}/${route.repo}/${route.number}`;
   if (view.kind === "step") return `${base}/step/${view.index + 1}`;
-  if (view.kind === "finish" || view.kind === "skim") return `${base}/${view.kind}`;
+  if (view.kind === "finish" || view.kind === "files") return `${base}/${view.kind}`;
   return base;
 }
 

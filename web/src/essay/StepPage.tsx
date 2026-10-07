@@ -75,7 +75,7 @@ function RailStep({ candidate, isCurrent, currentFile, session, goTo }: {
   );
 }
 
-export type RailPlace = { step?: EssayStep; isFinish?: boolean; isSkim?: boolean };
+export type RailPlace = { step?: EssayStep; isFinish?: boolean; isFiles?: boolean };
 
 export function Rail({ session, steps, place, goTo, currentFile }: { session: ReviewSession; steps: EssayStep[]; place: RailPlace; goTo: (view: EssayView) => void; currentFile?: string }) {
   const step = place.step;
@@ -87,13 +87,15 @@ export function Rail({ session, steps, place, goTo, currentFile }: { session: Re
         <span className="small muted">{pr.repo} · #{pr.number}</span>
         <span className="rail-pr-title">{pr.title}</span>
       </button>
+      <button className={`rail-link rail-files ${place.isFiles ? "is-current" : ""}`} onClick={() => goTo({ kind: "files" })}>
+        <Icon name="files" /> All files &amp; changes
+      </button>
       <ol className="rail-steps">
         {steps.map((candidate) => (
           <RailStep key={candidate.index} candidate={candidate} isCurrent={candidate.index === step?.index} currentFile={currentFile} session={session} goTo={goTo} />
         ))}
         <li className={`rail-step ${place.isFinish ? "is-current" : ""}`}><span className="rail-number">{steps.length + 1}</span><button className="rail-link" onClick={() => goTo({ kind: "finish" })}>Finish &amp; verdict</button></li>
       </ol>
-      <button className={`rail-link rail-skim ${place.isSkim ? "is-current" : ""}`} onClick={() => goTo({ kind: "skim" })}>Skim every file</button>
       <ReadingProgress steps={steps} step={step} session={session} />
     </nav>
   );
