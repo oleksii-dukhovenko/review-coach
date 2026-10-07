@@ -2,7 +2,9 @@
 
 A PR review inbox that coaches you through each review with Claude, instead of reviewing for you.
 
-<!-- media:hero -->
+https://github.com/user-attachments/assets/feddb7fa-e98a-4c8d-a7ba-ca107e2e108d
+
+<sub>A review in 40 seconds: open a PR, follow the guide, Ctrl+click a name, ask about a line.</sub>
 
 ## Install
 
@@ -26,7 +28,13 @@ That's it. It opens http://127.0.0.1:4477 when it's ready. **Run the same comman
 - **Ctrl+click any name** to see where that exact thing is used, through real language servers for Go, Dart, and TypeScript.
 - **New commits?** "Update" redoes only what changed and keeps your progress.
 
-<!-- media:gallery -->
+| At a glance | Hard ideas, simply |
+| --- | --- |
+| <a href="docs/media/at-a-glance.png"><img src="docs/media/at-a-glance.png" width="100%" alt="One-line summary, before and after, and a diagram of the parts the PR touches"></a> | <a href="docs/media/hard-ideas.png"><img src="docs/media/hard-ideas.png" width="100%" alt="Cards that explain the hardest ideas in one line, with an analogy and a JS example"></a> |
+| **A guide you can tick off** | **Questions right in the diff** |
+| <a href="docs/media/guide.png"><img src="docs/media/guide.png" width="100%" alt="Short steps with file chips to check off and a Next up button"></a> | <a href="docs/media/tour.png"><img src="docs/media/tour.png" width="100%" alt="A Did you notice question and a teaching note under the changed lines"></a> |
+| **Ctrl+click: where is this used?** | **Your inbox** |
+| <a href="docs/media/ctrl-click.png"><img src="docs/media/ctrl-click.png" width="100%" alt="The exact definition and uses of a name, from the TypeScript language server"></a> | <a href="docs/media/inbox.png"><img src="docs/media/inbox.png" width="100%" alt="The inbox with a PR ready to review"></a> |
 
 ## Everyday commands
 
