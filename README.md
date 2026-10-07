@@ -2,9 +2,9 @@
 
 A PR review inbox that coaches you through each review with Claude, instead of reviewing for you.
 
-https://github.com/user-attachments/assets/feddb7fa-e98a-4c8d-a7ba-ca107e2e108d
+https://github.com/user-attachments/assets/1678edb3-a617-43aa-a9b6-fe573c1b0f66
 
-<sub>A review in 40 seconds: open a PR, follow the guide, Ctrl+click a name, ask about a line.</sub>
+<sub>A review in a minute: open a PR, zoom into the big picture, read a step, click a line to comment or ask.</sub>
 
 ## Install
 
@@ -22,19 +22,21 @@ That's it. It opens http://127.0.0.1:4477 when it's ready. **Run the same comman
 ## What you get
 
 - **An inbox** of PRs waiting on your review, plus your own drafts and PRs with comments waiting on you.
-- **A walkthrough per PR**: a one-line summary, before and after, a diagram, hard ideas explained simply, and a short step-by-step guide.
-- **A guided tour of the diff** with "Did you notice...?" questions. Answer, click "Show me", or click "Explain".
-- **Ask Claude about any line**, or drag across several lines. Draft comments post only when you click.
+- **A front page per PR**: what it does in one line, where to spend your attention, and how long each step takes.
+- **A big picture you can zoom into**: click a box in the diagram to see the code behind it.
+- **Steps that read like an article**: plain text, code figures, and notes in the margin next to their line.
+- **Side-by-side diffs** everywhere: old code on the left, new on the right.
+- **Click any line** to add a review comment or ask Claude about it. Drag across several lines for a range.
+- **Questions in the text** check you understood. Answer, click "Show me", or click "Explain".
+- **All files & changes** on one page, with a checkbox per file.
 - **Ctrl+click any name** to see where that exact thing is used, through real language servers for Go, Dart, and TypeScript.
 - **New commits?** "Update" redoes only what changed and keeps your progress.
 
-| At a glance | Hard ideas, simply |
+| Zoom into the big picture | Steps with side-by-side code |
 | --- | --- |
-| <a href="docs/media/at-a-glance.png"><img src="docs/media/at-a-glance.png" width="100%" alt="One-line summary, before and after, and a diagram of the parts the PR touches"></a> | <a href="docs/media/hard-ideas.png"><img src="docs/media/hard-ideas.png" width="100%" alt="Cards that explain the hardest ideas in one line, with an analogy and a JS example"></a> |
-| **A guide you can tick off** | **Questions right in the diff** |
-| <a href="docs/media/guide.png"><img src="docs/media/guide.png" width="100%" alt="Short steps with file chips to check off and a Next up button"></a> | <a href="docs/media/tour.png"><img src="docs/media/tour.png" width="100%" alt="A Did you notice question and a teaching note under the changed lines"></a> |
-| **Ctrl+click: where is this used?** | **Your inbox** |
-| <a href="docs/media/ctrl-click.png"><img src="docs/media/ctrl-click.png" width="100%" alt="The exact definition and uses of a name, from the TypeScript language server"></a> | <a href="docs/media/inbox.png"><img src="docs/media/inbox.png" width="100%" alt="The inbox with a PR ready to review"></a> |
+| <a href="docs/media/zoom.png"><img src="docs/media/zoom.png" width="100%" alt="A diagram box opened into a panel showing its code, old on the left and new on the right"></a> | <a href="docs/media/step.png"><img src="docs/media/step.png" width="100%" alt="A step page: steps on the left, side-by-side code in the middle, a note on the right"></a> |
+| **All files & changes** | |
+| <a href="docs/media/all-files.png"><img src="docs/media/all-files.png" width="100%" alt="Every changed file with its line counts, a reviewed checkbox, and its step"></a> | |
 
 ## Everyday commands
 
