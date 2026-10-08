@@ -4,8 +4,9 @@ export type MainJobKind = "walkthrough" | "triage";
 
 export type JobSnapshot = { status: JobStatus; builtFor: string | null };
 
+/** My PRs with comments get triage instead; every other PR can have a walkthrough. */
 function wantsWalkthrough(pr: PullRequest): boolean {
-  return pr.kind === "review" || pr.isDraft;
+  return pr.kind === "review" || pr.isDraft || pr.openThreads.length === 0;
 }
 
 function wantsTriage(pr: PullRequest): boolean {

@@ -2,8 +2,10 @@ import type { Concept } from "../../server/concepts.ts";
 import type { AskRecord, JobRecord } from "../../server/db.ts";
 import type { ReviewCommentInput, ReviewEvent } from "../../server/github.ts";
 import type { MainJobKind } from "../../server/jobKinds.ts";
+import type { MyPrSection } from "../../server/myPrSections.ts";
 import type { JobStatus, PrKind, PullRequest } from "../../server/types.ts";
 
+export type { MyPrSection };
 export type { Concept, AskRecord, JobRecord, MainJobKind, ReviewCommentInput, ReviewEvent, PullRequest };
 export type { Walkthrough, Triage, Guide, HardIdea, PictureNode } from "../../server/schemas.ts";
 import type { PictureNode } from "../../server/schemas.ts";
@@ -31,6 +33,8 @@ export type InboxRow = {
   status: JobStatus;
   error: string | null;
   isOutOfDate: boolean;
+  // - Only on my own PRs.
+  section: MyPrSection | null;
 };
 
 export type Inbox = {

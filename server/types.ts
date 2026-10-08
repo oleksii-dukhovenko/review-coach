@@ -31,6 +31,9 @@ export type PullRequest = {
   createdAt?: string;
   updatedAt: string;
   openThreads: ReviewThread[];
+  // - Missing on PRs saved before they were fetched.
+  reviewDecision?: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
+  reviewerCount?: number;
 };
 
 export type DiffLineKind = "add" | "del" | "ctx";

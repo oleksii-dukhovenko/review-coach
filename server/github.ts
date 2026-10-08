@@ -12,6 +12,9 @@ query($owner: String!, $name: String!, $number: Int!) {
     pullRequest(number: $number) {
       title body url state isDraft createdAt updatedAt additions deletions
       headRefOid baseRefOid baseRefName author { login }
+      reviewDecision
+      reviewRequests(first: 1) { totalCount }
+      reviews(first: 50) { nodes { author { login } } }
       reviewThreads(first: 100) {
         nodes {
           id isResolved isOutdated path line diffSide
@@ -87,8 +90,18 @@ type RawPullRequest = {
   baseRefOid: string;
   baseRefName: string;
   author: { login: string } | null;
+  reviewDecision: PullRequest["reviewDecision"];
+  reviewRequests: { totalCount: number };
+  reviews: { nodes: { author: { login: string } | null }[] };
   reviewThreads: { nodes: RawThread[] };
 };
+
+/** People asked to review, plus anyone else who already did. */
+function reviewerCountOf(raw: RawPullRequest): number {
+  const author = raw.author?.login;
+  const reviewers = new Set(raw.reviews.nodes.map((review) => review.author?.login).filter((login) => login && login !== author));
+  return raw.reviewRequests.totalCount + reviewers.size;
+}
 
 async function fetchRawPullRequest(ref: PrRef): Promise<RawPullRequest> {
   const response = await runGhJson<{ data: { repository: { pullRequest: RawPullRequest } } }>([
@@ -146,6 +159,8 @@ export async function fetchPullRequest(ref: PrRef, kind: PrKind): Promise<PullRe
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
     openThreads: kind === "mine" ? openThreadsWaitingOnMe(raw, viewerLogin) : [],
+    reviewDecision: raw.reviewDecision,
+    reviewerCount: reviewerCountOf(raw),
   };
 }
 

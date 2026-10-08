@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { api, type Inbox, type InboxRow } from "../api.ts";
+import { api, type Inbox, type InboxRow, type MyPrSection } from "../api.ts";
 import { AutoUpdateToggle } from "../components/AutoUpdateToggle.tsx";
 import { ErrorBanner } from "../components/basics.tsx";
 import { Icon } from "../components/Icon.tsx";
@@ -77,6 +77,35 @@ function InboxSection({ title, rows, emptyText, onPrepare }: { title: string; ro
   );
 }
 
+const MY_SECTIONS: { section: MyPrSection; title: string; hint: string }[] = [
+  { section: "waiting-on-me", title: "Waiting on you", hint: "Comments or requested changes to answer." },
+  { section: "draft", title: "Drafts to finish", hint: "Not ready for review yet." },
+  { section: "no-reviewer", title: "No reviewer yet", hint: "Ready, but nobody is asked to review." },
+  { section: "approved", title: "Approved", hint: "Ready to merge." },
+  { section: "waiting-on-others", title: "Waiting on others", hint: "Reviewers have it. Nothing for you to do." },
+];
+
+function MySection({ title, hint, rows, onPrepare }: { title: string; hint: string; rows: InboxRow[]; onPrepare: (row: InboxRow) => void }) {
+  if (rows.length === 0) return null;
+  return (
+    <section>
+      <div className="section-title"><h2>{title}</h2><span className="count-pill">{rows.length}</span><span className="small muted">{hint}</span></div>
+      <div className="inbox-list">{rows.map((row) => <InboxRowView key={row.key} row={row} onPrepare={onPrepare} />)}</div>
+    </section>
+  );
+}
+
+function MyPrs({ rows, onPrepare }: { rows: InboxRow[]; onPrepare: (row: InboxRow) => void }) {
+  if (rows.length === 0) return <InboxSection title="My PRs" rows={rows} emptyText="You have no open PRs." onPrepare={onPrepare} />;
+  return (
+    <>
+      {MY_SECTIONS.map(({ section, title, hint }) => (
+        <MySection key={section} title={title} hint={hint} rows={rows.filter((row) => row.section === section)} onPrepare={onPrepare} />
+      ))}
+    </>
+  );
+}
+
 function PausedBanner({ onResume }: { onResume: () => void }) {
   return (
     <div className="banner">
@@ -115,7 +144,7 @@ export function InboxPage() {
       <div className="page-head">
         <div>
           <h1>Inbox</h1>
-          <div className="small muted">PRs waiting on you. {inbox.lastPollAt ? `Checked GitHub at ${new Date(inbox.lastPollAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.` : null}</div>
+          <div className="small muted">Reviews for others and every open PR of yours. {inbox.lastPollAt ? `Checked GitHub at ${new Date(inbox.lastPollAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.` : null}</div>
         </div>
         <button disabled={isRefreshing} onClick={() => void refreshFromGitHub()}>
           <Icon name="refresh" size={14} /> {isRefreshing ? "Checking..." : "Check now"}
@@ -125,7 +154,7 @@ export function InboxPage() {
       {inbox.lastPollError ? <div className="banner error">Could not reach GitHub. Showing the last list. ({inbox.lastPollError})</div> : null}
       {inbox.paused ? <PausedBanner onResume={resume} /> : null}
       <InboxSection title="Review for others" rows={inbox.review} emptyText="Nobody is waiting on your review." onPrepare={prepare} />
-      <InboxSection title="My PRs" rows={inbox.mine} emptyText="No drafts or open comments waiting on you." onPrepare={prepare} />
+      <MyPrs rows={inbox.mine} onPrepare={prepare} />
     </div>
   );
 }

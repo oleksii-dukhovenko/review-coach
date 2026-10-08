@@ -7,6 +7,7 @@ import { listConcepts, saveConcept, type Concept } from "./concepts.ts";
 import { getJob, getPr, getReviewState, getSetting, listAsks, listInboxPrs, saveReviewState } from "./db.ts";
 import { isAutoUpdateOn, refreshAndRecord, setAutoUpdate } from "./inbox.ts";
 import { combinedStatus, isOutOfDate, mainJobKinds, needsPreparing, type MainJobKind } from "./jobKinds.ts";
+import { sectionOf } from "./myPrSections.ts";
 import { pictureNodes } from "./pictureMap.ts";
 import { replyToThread, submitReview, type ReviewSubmission } from "./posting.ts";
 import { enqueue, isPaused, resumeQueue } from "./queue.ts";
@@ -32,6 +33,7 @@ function inboxRow(pr: PullRequest) {
     status: combinedStatus(jobs.map(({ job }) => job?.status ?? "none")),
     error: failedJob?.error ?? null,
     isOutOfDate: jobs.some(({ kind, job }) => isOutOfDate(pr, kind, job)),
+    section: pr.kind === "mine" ? sectionOf(pr) : null,
   };
 }
 

@@ -2,6 +2,7 @@ import { removeCheckout } from "./checkout.ts";
 import { autoUpdateSettingKey, deletePrEverywhere, getJob, getSetting, hidePrFromInbox, listInboxPrs, saveSetting, savePr, type JobKind } from "./db.ts";
 import { fetchPrState, fetchPullRequest, searchMyOpenPrs, searchReviewRequests } from "./github.ts";
 import { isOutOfDate, mainJobKinds } from "./jobKinds.ts";
+import { isBuiltAutomatically } from "./myPrSections.ts";
 import { enqueue } from "./queue.ts";
 import type { PrKind, PullRequest } from "./types.ts";
 
@@ -9,11 +10,6 @@ type PrRef = { owner: string; repo: string; number: number };
 
 async function fetchAll(refs: PrRef[], kind: PrKind): Promise<PullRequest[]> {
   return Promise.all(refs.map((ref) => fetchPullRequest(ref, kind)));
-}
-
-/** A draft or an open comment gives me something to do. */
-function hasWorkForMe(pr: PullRequest): boolean {
-  return mainJobKinds(pr).length > 0;
 }
 
 function hasNeverBeenBuilt(pr: PullRequest, kind: JobKind): boolean {
@@ -27,7 +23,7 @@ function isWalkthroughReady(pr: PullRequest): boolean {
 
 /** Prepares ahead only what you will almost always open. */
 function queueFirstBuilds(prs: PullRequest[]): void {
-  for (const pr of prs) {
+  for (const pr of prs.filter(isBuiltAutomatically)) {
     const unbuiltKinds = mainJobKinds(pr).filter((kind) => hasNeverBeenBuilt(pr, kind));
     unbuiltKinds.forEach((kind) => enqueue({ prKey: pr.key, kind }));
     const needsGuide = isWalkthroughReady(pr) && hasNeverBeenBuilt(pr, "guide");
@@ -69,7 +65,7 @@ async function cleanUpDroppedPrs(currentKeys: Set<string>): Promise<void> {
 export async function refreshInbox(): Promise<void> {
   const [reviewRefs, myRefs] = await Promise.all([searchReviewRequests(), searchMyOpenPrs()]);
   const reviewPrs = await fetchAll(reviewRefs, "review");
-  const myPrs = (await fetchAll(myRefs, "mine")).filter(hasWorkForMe);
+  const myPrs = await fetchAll(myRefs, "mine");
   const current = [...reviewPrs, ...myPrs];
   await cleanUpDroppedPrs(new Set(current.map((pr) => pr.key)));
   current.forEach(savePr);

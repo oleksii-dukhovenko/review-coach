@@ -33,8 +33,8 @@ describe("mainJobKinds", () => {
     expect(mainJobKinds(pullRequest({ openThreads: [OPEN_THREAD] }))).toEqual(["triage"]);
   });
 
-  it("gives my ready PR without comments nothing", () => {
-    expect(mainJobKinds(pullRequest({}))).toEqual([]);
+  it("offers my ready PR without comments a walkthrough", () => {
+    expect(mainJobKinds(pullRequest({}))).toEqual(["walkthrough"]);
   });
 });
 
