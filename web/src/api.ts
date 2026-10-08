@@ -103,6 +103,7 @@ export const api = {
   file: (route: PrRoute, file: string) => requestJson<FileView>("GET", `${prUrl(route)}/file?${new URLSearchParams({ file })}`),
   snippet: (route: PrRoute, file: string, line: number) =>
     requestJson<Snippet>("GET", `${prUrl(route)}/snippet?${new URLSearchParams({ file, line: String(line) })}`),
+  rewriteNotes: (route: PrRoute) => requestJson<{ ok: boolean }>("POST", `${prUrl(route)}/rewrite-notes`),
   pictureNodes: (route: PrRoute) => requestJson<PictureNode[]>("POST", `${prUrl(route)}/picture-nodes`),
 };
 

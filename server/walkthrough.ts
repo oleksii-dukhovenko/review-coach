@@ -17,7 +17,14 @@ import {
 import type { DiffFile, PullRequest, RemovedSymbol, ReviewThread } from "./types.ts";
 import { mergeUpdate, planUpdate, type UpdatePlan, type WalkthroughChange } from "./walkthroughMerge.ts";
 
-export type WalkthroughData = { walkthrough: Walkthrough; files: DiffFile[]; removed: RemovedSymbol[]; changes?: WalkthroughChange[] };
+export type WalkthroughData = {
+  walkthrough: Walkthrough;
+  files: DiffFile[];
+  removed: RemovedSymbol[];
+  changes?: WalkthroughChange[];
+  // - True once every note follows the plain-words rules.
+  plainNotes?: boolean;
+};
 
 export type TriageData = { triage: Triage; files: DiffFile[] };
 
@@ -77,7 +84,7 @@ export async function buildWalkthrough(pr: PullRequest): Promise<BuiltJob<Walkth
     addDirs: [config.rulesDir, config.conceptsDir],
   });
   const walkthrough = await checkWalkthroughProofs(built.data, lineCounterFor(checkout.worktree, checkout.mergeBase));
-  return { data: { walkthrough, files, removed }, sessionId: built.sessionId };
+  return { data: { walkthrough, files, removed, plainNotes: true }, sessionId: built.sessionId };
 }
 
 export async function buildTriage(pr: PullRequest): Promise<BuiltJob<TriageData>> {
@@ -130,7 +137,7 @@ export async function updateWalkthrough(pr: PullRequest, previous: PreviousBuild
   const change = { fromSha: previous.builtFor, toSha: pr.headSha, at: new Date().toISOString() };
   const merged = mergeUpdate({ previous: previous.data, plan, update: asked?.data, newFiles: files, removed, change, idPrefix: updateIdPrefix(pr) });
   const walkthrough = await checkWalkthroughProofs(merged.walkthrough, lineCounterFor(checkout.worktree, checkout.mergeBase));
-  return { data: { ...merged, walkthrough }, sessionId: asked?.sessionId ?? previous.sessionId ?? randomUUID() };
+  return { data: { ...merged, walkthrough, plainNotes: previous.data.plainNotes }, sessionId: asked?.sessionId ?? previous.sessionId ?? randomUUID() };
 }
 
 function threadsNeedingTriage(pr: PullRequest, previousFingerprint: string): ReviewThread[] {

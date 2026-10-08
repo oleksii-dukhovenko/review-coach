@@ -12,6 +12,7 @@ import { pictureNodes } from "./pictureMap.ts";
 import { replyToThread, submitReview, type ReviewSubmission } from "./posting.ts";
 import { enqueue, isPaused, resumeQueue } from "./queue.ts";
 import { findReferences, isIdentifier, readFileView, readSnippet, warmUpForPr, type ReferenceQuery } from "./references.ts";
+import { rewriteNotes } from "./rewriteNotes.ts";
 import { prKeyOf, type PullRequest } from "./types.ts";
 
 function mainJobs(pr: PullRequest) {
@@ -175,6 +176,11 @@ export function buildRoutes(): Hono {
     const file = context.req.query("file") ?? "";
     const line = Number(context.req.query("line"));
     return context.json(await readSnippet(requirePr(context), file, line, 7));
+  });
+
+  api.post(`${prPath}/rewrite-notes`, async (context) => {
+    await rewriteNotes(requirePr(context).key);
+    return context.json({ ok: true });
   });
 
   api.post(`${prPath}/picture-nodes`, async (context) => context.json(await pictureNodes(requirePr(context).key)));

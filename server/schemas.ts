@@ -37,20 +37,24 @@ const hardIdea = z.object({
   line: z.number().int(),
 });
 
+const noteTitle = z.string().describe(
+  "A plain sentence with a subject and a verb that names the real thing in this code, max 10 words. "
+  + "Good: 'onKey returns false so the key still reaches the widget'. Bad: 'Wrap, then always forward', 'false means not handled'.",
+);
+
+const noteOneLiner = z.string().describe(
+  "What this code does and why, max 25 words, readable without seeing the code. Name the actual function or variable. "
+  + "No unexplained shorthand ('marking', 'the slot', 'the old one'): say which thing. Shown first; the explanation is behind a click.",
+);
+
 const teachingNote = z.object({
   line: z.number().int().describe("The line that shows the idea, e.g. the `return false`, not the start of its function"),
   endLine: z.number().int().describe("Last line the note is about. Same as line unless the idea truly spans lines; max 5 lines."),
   side,
   kind: z.enum(["syntax", "pattern", "design"]),
   conceptKey: z.string().describe("kebab-case id, e.g. go-defer, sql-transaction"),
-  title: z.string().describe(
-    "A plain sentence with a subject and a verb that names the real thing in this code, max 10 words. "
-    + "Good: 'onKey returns false so the key still reaches the widget'. Bad: 'Wrap, then always forward', 'false means not handled'.",
-  ),
-  oneLiner: z.string().describe(
-    "What this code does and why, max 25 words, readable without seeing the code. Name the actual function or variable. "
-    + "No unexplained shorthand ('marking', 'the slot', 'the old one'): say which thing. Shown first; the explanation is behind a click.",
-  ),
+  title: noteTitle,
+  oneLiner: noteOneLiner,
   explanation: z.string().describe("Assume I know nothing. Max 4 short lines or bullets. Name the technical term at the end."),
   jsExample: z.string().describe("JS/Node equivalent, or empty if none"),
 });
@@ -96,6 +100,10 @@ const picture = z.object({
   caption: z.string().describe("Max 12 words: what the picture shows"),
   diagram: z.string().describe(MERMAID_RULES),
   nodes: z.array(pictureNode).describe("Where each box lives in the code: one entry per node in the diagram"),
+});
+
+export const noteRewriteSchema = z.object({
+  notes: z.array(z.object({ id: z.string().describe("The note id, exactly as given"), title: noteTitle, oneLiner: noteOneLiner })),
 });
 
 export const pictureMapSchema = z.object({ nodes: z.array(pictureNode).describe("One entry per node in the diagram") });
@@ -170,3 +178,4 @@ export const walkthroughUpdateJsonSchema = toClaudeJsonSchema(walkthroughUpdateS
 export const triageJsonSchema = toClaudeJsonSchema(triageSchema);
 export const guideJsonSchema = toClaudeJsonSchema(guideSchema);
 export const pictureMapJsonSchema = toClaudeJsonSchema(pictureMapSchema);
+export const noteRewriteJsonSchema = toClaudeJsonSchema(noteRewriteSchema);

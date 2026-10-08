@@ -7,7 +7,7 @@ import { useActiveAnchor } from "../activeAnchor.ts";
 import { CodeFigure } from "./CodeFigure.tsx";
 import type { EssayFile, EssayStep, Footnote, QuestionData } from "./model.ts";
 import { isQuestionSettled, QuestionBlock } from "./QuestionBlock.tsx";
-import { footnoteRefId, InlineNotes, Sidenotes, StepFiles, YourReview } from "./ReviewMargin.tsx";
+import { footnoteRefId, InlineNotes, RewriteNotes, Sidenotes, StepFiles, YourReview } from "./ReviewMargin.tsx";
 import { fileAnchorId, type EssayView, type ReviewSession } from "./session.ts";
 
 type StepPageProps = {
@@ -217,6 +217,7 @@ export function StepPage({ session, data, steps, step, goTo, canPost, children }
       <Article parts={parts} steps={steps} goTo={goTo}>{children}</Article>
       <aside className="essay-margin">
         <StepFiles session={session} step={step} />
+        <RewriteNotes session={session} data={data} />
         <Sidenotes session={session} step={step} hoveredNote={hoveredNote} onHoverNote={setHoveredNote} />
         <YourReview session={session} data={data} canPost={canPost} />
       </aside>

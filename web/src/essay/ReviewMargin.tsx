@@ -4,6 +4,7 @@ import { api, type ReviewEvent, type WalkthroughData } from "../api.ts";
 import { Markdown } from "../components/basics.tsx";
 import { StillFuzzyArea, useStillFuzzy } from "../components/ExplainChat.tsx";
 import { Icon } from "../components/Icon.tsx";
+import { Working } from "../components/Working.tsx";
 import { allReviewComments, confirmedProblems, summaryWithOutdated, type ConfirmedProblem } from "../pages/FinishPanel.tsx";
 import type { PlacedComment } from "../placeComments.ts";
 import { noteRowId } from "./CodeFigure.tsx";
@@ -123,6 +124,31 @@ export function InlineNotes({ session, file, footnotes, hoveredNote, onHoverNote
       {footnotes.map((footnote) => (
         <Sidenote key={footnote.number} session={session} file={file} footnote={footnote} isHovered={hoveredNote === footnote.number} onHover={onHoverNote} />
       ))}
+    </div>
+  );
+}
+
+/** Offers plainer notes on walkthroughs written before the plain-words rules. */
+export function RewriteNotes({ session, data }: { session: ReviewSession; data: WalkthroughData }) {
+  const [isRewriting, setIsRewriting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (data.plainNotes) return null;
+  const rewrite = async () => {
+    setIsRewriting(true);
+    setError(null);
+    try {
+      await api.rewriteNotes(session.route);
+      window.location.reload();
+    } catch (rewriteError) {
+      setError(rewriteError instanceof Error ? rewriteError.message : String(rewriteError));
+      setIsRewriting(false);
+    }
+  };
+  if (isRewriting) return <div className="rewrite-notes small"><Working size={13}>Rewriting every note in plain words. The page reloads when it is done.</Working></div>;
+  return (
+    <div className="rewrite-notes small">
+      Notes hard to follow? <button className="text-link" onClick={() => void rewrite()}>Rewrite them in plain words</button>
+      {error ? <div className="composer-error">Could not rewrite: {error}</div> : null}
     </div>
   );
 }

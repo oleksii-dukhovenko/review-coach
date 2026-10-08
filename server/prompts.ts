@@ -205,3 +205,23 @@ export function pictureMapPrompt(input: PictureMapInput): string {
     `## Files this PR changes\n${input.files.map((file) => `- ${file.path}`).join("\n")}`,
   ].join("\n\n");
 }
+
+export type NoteToRewrite = { id: string; file: string; lines: string; code: string; title: string; oneLiner: string; explanation: string };
+
+/** Asks for plainer titles and one-liners, keeping each note's meaning. */
+export function noteRewritePrompt(notes: NoteToRewrite[]): string {
+  const described = notes.map((note) => [
+    `### Note ${note.id}: ${note.file} ${note.lines}`,
+    untrustedBlock("code", note.code || "(not in the diff; read the file)"),
+    untrustedBlock("current_title", note.title),
+    untrustedBlock("current_one_liner", note.oneLiner),
+    untrustedBlock("explanation", note.explanation),
+  ].join("\n"));
+  return [
+    "These notes sit beside code in a review tool. The reader skims the title and one-liner next to the code.",
+    "Rewrite only the title and one-liner of every note so each says what happens to which named thing in this code.",
+    "Keep the meaning. Use the code and the explanation; read the checkout if you need more. Do not add claims the code does not show.",
+    "Return every note, with its id exactly as given.",
+    ...described,
+  ].join("\n\n");
+}
