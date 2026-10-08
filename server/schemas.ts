@@ -43,8 +43,14 @@ const teachingNote = z.object({
   side,
   kind: z.enum(["syntax", "pattern", "design"]),
   conceptKey: z.string().describe("kebab-case id, e.g. go-defer, sql-transaction"),
-  title: z.string().describe("Plain name, max 8 words, e.g. defer runs when the function ends"),
-  oneLiner: z.string().describe("The idea in one plain sentence, max 20 words. Shown first; the explanation is behind a click."),
+  title: z.string().describe(
+    "A plain sentence with a subject and a verb that names the real thing in this code, max 10 words. "
+    + "Good: 'onKey returns false so the key still reaches the widget'. Bad: 'Wrap, then always forward', 'false means not handled'.",
+  ),
+  oneLiner: z.string().describe(
+    "What this code does and why, max 25 words, readable without seeing the code. Name the actual function or variable. "
+    + "No unexplained shorthand ('marking', 'the slot', 'the old one'): say which thing. Shown first; the explanation is behind a click.",
+  ),
   explanation: z.string().describe("Assume I know nothing. Max 4 short lines or bullets. Name the technical term at the end."),
   jsExample: z.string().describe("JS/Node equivalent, or empty if none"),
 });

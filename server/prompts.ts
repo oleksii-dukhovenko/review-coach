@@ -69,6 +69,7 @@ export function walkthroughPrompt(input: WalkthroughInput): string {
   doing it) and what it hands to the next step. Same actor name every time that part acts. Point file:line at the code that does it.
 - tour: every non-skim file, in the order the code runs. Each stop gets:
   - notes on syntax, patterns, or design choices the reader may not know, anchored to a line. oneLiner first; keep the explanation short;
+    the title and oneLiner must make sense to someone who skims them beside the code: say what happens to which named thing, no labels or riddles;
   - coaching questions for real problems and for things worth knowing. Aim for the few that matter most.
 - Line numbers: RIGHT side uses new-file lines; LEFT side uses old-file lines of deleted code.
 - The checkout is the PR head. Read surrounding code when the diff is not enough.`,
