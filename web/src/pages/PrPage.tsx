@@ -4,6 +4,7 @@ import { api, type JobRecord, type MainJobKind, type PrPageData, type PrRoute } 
 import { AutoUpdateToggle } from "../components/AutoUpdateToggle.tsx";
 import { ErrorBanner } from "../components/basics.tsx";
 import { Icon } from "../components/Icon.tsx";
+import { Working } from "../components/Working.tsx";
 import { EssayReview } from "../essay/EssayReview.tsx";
 import type { EssayView } from "../essay/session.ts";
 import { MyPrReview } from "./MyPrReview.tsx";
@@ -28,7 +29,7 @@ function hasBuild(job: JobRecord | null): boolean {
 
 function UpdatingStatus({ job, onPrepare }: { job: JobRecord; onPrepare: () => void }) {
   if (isInProgress(job.status)) {
-    return <div className="banner info">Updating for the new changes. Only what changed is redone; your answers, notes and checkmarks stay. {job.error ?? ""}</div>;
+    return <div className="banner info"><Working>Updating for the new changes. Only what changed is redone; your answers, notes and checkmarks stay. {job.error ?? ""}</Working></div>;
   }
   if (job.status !== "failed") return null;
   return (
@@ -43,8 +44,8 @@ function BuildStatus({ kind, job, onPrepare }: { kind: MainJobKind; job: JobReco
   if (job && hasBuild(job)) return <UpdatingStatus job={job} onPrepare={onPrepare} />;
   const label = JOB_LABEL[kind];
   const status = job?.status ?? "none";
-  if (status === "queued") return <div className="banner info">{label}: waiting its turn. One PR is prepared at a time. {job?.error ?? ""}</div>;
-  if (status === "building") return <div className="banner info">{label}: preparing now. This takes a few minutes. The page updates by itself.</div>;
+  if (status === "queued") return <div className="banner info"><Working>{label}: waiting its turn. One PR is prepared at a time. {job?.error ?? ""}</Working></div>;
+  if (status === "building") return <div className="banner info"><Working>{label}: preparing now. This takes a few minutes. The page updates by itself.</Working></div>;
   if (status === "failed") {
     return (
       <div className="banner error">

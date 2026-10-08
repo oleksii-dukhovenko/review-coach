@@ -147,6 +147,19 @@ textarea { min-height: 72px; resize: vertical; }
 }
 .chip.building::before { animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.3; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  display: inline-block; flex: none; box-sizing: border-box; border-radius: 999px;
+  border: 2px solid color-mix(in srgb, currentColor 22%, transparent); border-top-color: currentColor;
+  animation: spin 0.8s linear infinite;
+}
+.working { display: inline-flex; gap: 6px; align-items: center; }
+.chip.is-working::before { display: none; }
+.preparing-note {
+  display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 16px 0 0; padding: 10px 14px;
+  background: var(--color-accent-2-100); border-radius: var(--radius-md); font-size: 14px; color: var(--color-accent-2-800);
+}
+.guide-status { margin: 12px 0 0; }
 
 /* On/off switch */
 .switch { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; user-select: none; color: var(--text-muted); font-size: 13px; }

@@ -4,6 +4,7 @@ import { api, type Inbox, type InboxRow, type MyPrSection } from "../api.ts";
 import { AutoUpdateToggle } from "../components/AutoUpdateToggle.tsx";
 import { ErrorBanner } from "../components/basics.tsx";
 import { Icon } from "../components/Icon.tsx";
+import { Working } from "../components/Working.tsx";
 
 const REFRESH_VIEW_MS = 15_000;
 
@@ -15,8 +16,14 @@ const STATUS_LABEL = {
   failed: "Failed",
 } as const;
 
+function isInProgress(row: InboxRow): boolean {
+  return row.status === "building" || row.status === "queued";
+}
+
 function StatusChip({ row }: { row: InboxRow }) {
   if (row.isOutOfDate) return <span className="chip stale">Out of date</span>;
+  if (row.status === "building") return <span className="chip building is-working"><Working size={13}>Preparing</Working></span>;
+  if (row.status === "queued") return <span className="chip queued is-working"><Working size={13}>Waiting its turn</Working></span>;
   return <span className={`chip ${row.status}`} title={row.error ?? ""}>{STATUS_LABEL[row.status]}</span>;
 }
 
@@ -106,6 +113,20 @@ function MyPrs({ rows, onPrepare }: { rows: InboxRow[]; onPrepare: (row: InboxRo
   );
 }
 
+/** Names what Claude is preparing right now, so you know the inbox is busy. */
+function PreparingNote({ rows }: { rows: InboxRow[] }) {
+  const building = rows.find((row) => row.status === "building");
+  const waitingCount = rows.filter((row) => row.status === "queued").length;
+  if (!building && waitingCount === 0) return null;
+  return (
+    <div className="preparing-note">
+      <Working>{building ? <>Preparing <strong>{building.title}</strong>. This takes a few minutes.</> : "Starting the next one."}</Working>
+      {waitingCount ? <span className="muted"> {waitingCount} more waiting, one at a time.</span> : null}
+      <span className="muted"> The list updates by itself.</span>
+    </div>
+  );
+}
+
 function PausedBanner({ onResume }: { onResume: () => void }) {
   return (
     <div className="banner">
@@ -153,6 +174,7 @@ export function InboxPage() {
       <ErrorBanner message={error} />
       {inbox.lastPollError ? <div className="banner error">Could not reach GitHub. Showing the last list. ({inbox.lastPollError})</div> : null}
       {inbox.paused ? <PausedBanner onResume={resume} /> : null}
+      <PreparingNote rows={[...inbox.review, ...inbox.mine].filter(isInProgress)} />
       <InboxSection title="Review for others" rows={inbox.review} emptyText="Nobody is waiting on your review." onPrepare={prepare} />
       <MyPrs rows={inbox.mine} onPrepare={prepare} />
     </div>

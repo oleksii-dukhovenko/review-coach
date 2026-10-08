@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { WalkthroughData } from "../api.ts";
 import { Markdown } from "../components/basics.tsx";
+import { Working } from "../components/Working.tsx";
 import { BeforeAfter, ChangesBanner, FlowSection, GlossaryTerm, RemovedCodeSection } from "../pages/WalkthroughSections.tsx";
 import { ZoomablePicture } from "./PictureZoom.tsx";
 import { attentionItems, type AttentionItem, type EssayStep } from "./model.ts";
@@ -64,7 +65,17 @@ function diffStats(data: WalkthroughData) {
   return { files: data.files.length, adds: lines.filter((line) => line.kind === "add").length, dels: lines.filter((line) => line.kind === "del").length };
 }
 
-function Contents({ steps, data, goTo }: { steps: EssayStep[]; data: WalkthroughData; goTo: (view: EssayView) => void }) {
+function isGuidePending(session: ReviewSession): boolean {
+  const status = session.page.guide?.status;
+  return status === "queued" || status === "building";
+}
+
+function GuideStatus({ session }: { session: ReviewSession }) {
+  if (!isGuidePending(session)) return null;
+  return <p className="small muted guide-status"><Working size={13}>Sorting the steps into a reading order. They may change when it is done.</Working></p>;
+}
+
+function Contents({ session, steps, data, goTo }: { session: ReviewSession; steps: EssayStep[]; data: WalkthroughData; goTo: (view: EssayView) => void }) {
   const total = steps.reduce((sum, step) => sum + step.minutes, 0);
   const stats = diffStats(data);
   return (
@@ -79,6 +90,7 @@ function Contents({ steps, data, goTo }: { steps: EssayStep[]; data: Walkthrough
           </li>
         ))}
       </ol>
+      <GuideStatus session={session} />
       <div className="lede-stats mono">
         <span>{stats.files} files</span><span className="accent-text">+{stats.adds}</span><span className="magenta-text">−{stats.dels}</span>
       </div>
@@ -115,7 +127,7 @@ export function LedePage({ session, data, steps, goTo, actions, extra }: LedePro
       <ChangesBanner change={data.changes?.at(-1)} onOpenFile={session.openFile} />
       <div className="lede-grid">
         <AttentionList items={attentionItems(steps, data.walkthrough.hardIdeas)} goTo={goTo} />
-        <Contents steps={steps} data={data} goTo={goTo} />
+        <Contents session={session} steps={steps} data={data} goTo={goTo} />
       </div>
       {extra}
       <Background session={session} data={data} />
