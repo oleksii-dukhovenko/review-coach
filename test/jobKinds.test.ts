@@ -29,8 +29,8 @@ describe("mainJobKinds", () => {
     expect(mainJobKinds(pullRequest({ isDraft: true, openThreads: [OPEN_THREAD] }))).toEqual(["triage", "walkthrough"]);
   });
 
-  it("gives my ready PR with comments only comment help", () => {
-    expect(mainJobKinds(pullRequest({ openThreads: [OPEN_THREAD] }))).toEqual(["triage"]);
+  it("gives my ready PR with comments both comment help and a walkthrough", () => {
+    expect(mainJobKinds(pullRequest({ openThreads: [OPEN_THREAD] }))).toEqual(["triage", "walkthrough"]);
   });
 
   it("offers my ready PR without comments a walkthrough", () => {

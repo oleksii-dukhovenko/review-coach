@@ -4,20 +4,15 @@ export type MainJobKind = "walkthrough" | "triage";
 
 export type JobSnapshot = { status: JobStatus; builtFor: string | null };
 
-/** My PRs with comments get triage instead; every other PR can have a walkthrough. */
-function wantsWalkthrough(pr: PullRequest): boolean {
-  return pr.kind === "review" || pr.isDraft || pr.openThreads.length === 0;
-}
-
 function wantsTriage(pr: PullRequest): boolean {
   return pr.openThreads.length > 0;
 }
 
-/** Triage comes first so comments sit above the walkthrough. */
+/** Every PR gets a walkthrough; comments waiting on me add triage, listed first. */
 export function mainJobKinds(pr: PullRequest): MainJobKind[] {
   const kinds: MainJobKind[] = [];
   if (wantsTriage(pr)) kinds.push("triage");
-  if (wantsWalkthrough(pr)) kinds.push("walkthrough");
+  kinds.push("walkthrough");
   return kinds;
 }
 
