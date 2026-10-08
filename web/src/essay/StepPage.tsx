@@ -1,11 +1,11 @@
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import type { WalkthroughData } from "../api.ts";
 import { Markdown } from "../components/basics.tsx";
 import { Icon } from "../components/Icon.tsx";
 import { useActiveAnchor } from "../activeAnchor.ts";
 import { CodeFigure } from "./CodeFigure.tsx";
-import { anchorLine, isLineAt, type EssayFile, type EssayStep, type Footnote, type QuestionData } from "./model.ts";
+import type { EssayFile, EssayStep, Footnote, QuestionData } from "./model.ts";
 import { isQuestionSettled, QuestionBlock } from "./QuestionBlock.tsx";
 import { footnoteRefId, InlineNotes, Sidenotes, StepFiles, YourReview } from "./ReviewMargin.tsx";
 import { fileAnchorId, type EssayView, type ReviewSession } from "./session.ts";
@@ -114,19 +114,17 @@ function FootnoteMarks({ stepIndex, footnotes, onHover }: { stepIndex: number; f
 
 type ArticleParts = { session: ReviewSession; step: EssayStep; hoveredNote: number | null; onHoverNote: (number: number | null) => void };
 
-function footnoteFinder(file: EssayFile) {
-  return (line: Parameters<typeof isLineAt>[0]) => file.footnotes.find((footnote) => isLineAt(line, anchorLine(footnote.note)))?.number;
+function hasOpenQuestion(questions: QuestionData[], session: ReviewSession): boolean {
+  return questions.some((question) => !isQuestionSettled(session.state.answers[question.id]));
 }
 
-/** Text, figures and questions for one file; text after an open question is dimmed until it is settled. */
+/** Text, then figures with their questions inline; text after an open question is dimmed until it is settled. */
 function FileSection({ file, parts, dimState }: { file: EssayFile; parts: ArticleParts; dimState: { isDimmed: boolean } }) {
   const { session, step } = parts;
   const paragraphClass = dimState.isDimmed ? "essay-p is-dimmed" : "essay-p";
-  const question = (placed: QuestionData) => {
-    const block = <QuestionBlock key={placed.id} session={session} file={file.path} question={placed} />;
-    if (!isQuestionSettled(session.state.answers[placed.id])) dimState.isDimmed = true;
-    return block;
-  };
+  const notes = { footnotes: file.footnotes, hovered: parts.hoveredNote, onHover: parts.onHoverNote };
+  const allQuestions = [...file.figures.flatMap((figure) => figure.questionsAfter), ...file.looseQuestions];
+  if (hasOpenQuestion(allQuestions, session)) dimState.isDimmed = true;
   return (
     <section className="essay-file" id={fileAnchorId(file.path)}>
       <div className="essay-file-label mono" title={file.path}>{file.path}</div>
@@ -136,12 +134,11 @@ function FileSection({ file, parts, dimState }: { file: EssayFile; parts: Articl
       </div>
       <InlineNotes session={session} file={file.path} footnotes={file.footnotes} hoveredNote={parts.hoveredNote} onHoverNote={parts.onHoverNote} />
       {file.figures.map((figure) => (
-        <Fragment key={figure.id}>
-          <CodeFigure figure={figure} diff={file.diff!} session={session} footnoteAt={footnoteFinder(file)} hoveredNote={parts.hoveredNote} onHoverNote={parts.onHoverNote} />
-          {figure.questionsAfter.map(question)}
-        </Fragment>
+        <CodeFigure key={figure.id} figure={figure} diff={file.diff!} session={session} notes={notes} showsQuestions />
       ))}
-      {file.looseQuestions.map(question)}
+      {file.looseQuestions.map((question) => (
+        <QuestionBlock key={question.id} session={session} file={file.path} question={question} onShowLines={() => session.openLine(file.path, question.line, question.side)} />
+      ))}
     </section>
   );
 }
@@ -158,7 +155,7 @@ function SkimmedFiles({ files, parts }: { files: EssayFile[]; parts: ArticlePart
             {file.path} <span className="muted">({file.diff?.tagReason || "skim"}) · {openPath === file.path ? "hide" : "show diff"}</span>
           </button>
           {openPath === file.path ? file.figures.map((figure) => (
-            <CodeFigure key={figure.id} figure={figure} diff={file.diff!} session={parts.session} footnoteAt={() => undefined} hoveredNote={null} onHoverNote={() => undefined} />
+            <CodeFigure key={figure.id} figure={figure} diff={file.diff!} session={parts.session} />
           )) : null}
         </div>
       ))}

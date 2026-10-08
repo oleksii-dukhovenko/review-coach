@@ -6,7 +6,7 @@ import { Markdown, ProofBadge } from "../components/basics.tsx";
 import { ExplanationBox, explainPrompt, useExplainChat, type ExplainChatState } from "../components/ExplainChat.tsx";
 import { Icon } from "../components/Icon.tsx";
 import { EMPTY_ANSWER, type QuestionAnswer } from "../savedState.ts";
-import type { QuestionData } from "./model.ts";
+import { rangeLabel, rangeOf, type QuestionData } from "./model.ts";
 import type { ReviewSession } from "./session.ts";
 
 type Stage = "idle" | "answering" | "answered";
@@ -27,7 +27,8 @@ function chatOf(answer: QuestionAnswer): ExplainChatState | undefined {
   return answer.explanation === undefined ? undefined : { explanation: answer.explanation, followUps: answer.followUps };
 }
 
-type BlockProps = { session: ReviewSession; file: string; question: QuestionData };
+// - onShowLines: set when the question sits outside the code it asks about.
+type BlockProps = { session: ReviewSession; file: string; question: QuestionData; onShowLines?: () => void };
 
 function AnsweringBox({ typed, isSending, onType, onSend, onCancel }: {
   typed: string; isSending: boolean; onType: (typed: string) => void; onSend: () => void; onCancel: () => void;
@@ -89,7 +90,7 @@ function ReviewChoice({ answer, onAdd, onFine, onUndo }: { answer: QuestionAnswe
 }
 
 /** "Q." in the text: answer it, see the answer, get it explained, or skip for now. */
-export function QuestionBlock({ session, file, question }: BlockProps) {
+export function QuestionBlock({ session, file, question, onShowLines }: BlockProps) {
   const answer = session.state.answers[question.id] ?? EMPTY_ANSWER;
   const save = (changes: Partial<QuestionAnswer>) => session.saveAnswer(question.id, { ...answer, ...changes });
   const [stage, setStage] = useState<Stage>(answer.feedback ? "answered" : "idle");
@@ -113,6 +114,7 @@ export function QuestionBlock({ session, file, question }: BlockProps) {
       <span className="q-mark">Q.</span>
       <div className="q-body">
         <p className="q-text">{question.question}</p>
+        {onShowLines ? <button className="line-ref" onClick={onShowLines}>→ {rangeLabel(rangeOf(question))}</button> : null}
         {stage === "idle" && !answer.skipped ? (
           <div className="q-actions">
             <button className="btn btn-magenta" onClick={() => setStage("answering")}>I'll answer</button>

@@ -10,19 +10,40 @@ import { PeekReferences } from "../components/PeekReferences.tsx";
 import { wordAtClick } from "../components/wordAtPoint.ts";
 import type { PlacedComment } from "../placeComments.ts";
 import { Composer } from "./Composer.tsx";
-import { anchorLine, foldRows, isLineAt, type Figure, type ShownRow } from "./model.ts";
+import {
+  anchorLine, firstShownLine, foldRows, isLineAt, isLineInRange, rangeOf, type Figure, type Footnote, type QuestionData, type ShownRow,
+} from "./model.ts";
+import { QuestionBlock } from "./QuestionBlock.tsx";
 import type { ReviewSession } from "./session.ts";
 import { splitShownRows, type SplitRow } from "./splitRows.ts";
+
+// - Notes in the margin, and the one under the mouse.
+export type FigureNotes = { footnotes: Footnote[]; hovered: number | null; onHover: (number: number | null) => void };
 
 type FigureProps = {
   figure: Figure;
   diff: DiffFile;
   session: ReviewSession;
-  // - Rows a sidenote points at, with the footnote number.
-  footnoteAt: (line: DiffLine) => number | undefined;
-  hoveredNote: number | null;
-  onHoverNote: (number: number | null) => void;
+  notes?: FigureNotes;
+  // - Questions open under the lines they ask about.
+  showsQuestions?: boolean;
 };
+
+function footnoteCovering(line: DiffLine, props: FigureProps): number | undefined {
+  return props.notes?.footnotes.find((footnote) => isLineInRange(line, rangeOf(footnote.note)))?.number;
+}
+
+function footnoteStartingAt(line: DiffLine, props: FigureProps): number | undefined {
+  return props.notes?.footnotes.find((footnote) => firstShownLine(props.figure.lines, rangeOf(footnote.note)) === line)?.number;
+}
+
+function isAskedAbout(line: DiffLine, props: FigureProps): boolean {
+  return props.showsQuestions === true && props.figure.questionsAfter.some((question) => isLineInRange(line, rangeOf(question)));
+}
+
+function questionsBelow(line: DiffLine, props: FigureProps): QuestionData[] {
+  return props.showsQuestions ? props.figure.questionsAfter.filter((question) => isLineAt(line, anchorLine(question))) : [];
+}
 
 function lineKey(point: LinePoint): string {
   return `${point.side}:${point.line}`;
@@ -70,10 +91,11 @@ type LineMarks = {
 type HalfSide = "left" | "right";
 
 function halfClassOf(line: DiffLine, marks: LineMarks): string {
-  const footnote = marks.props.footnoteAt(line);
+  const footnote = footnoteCovering(line, marks.props);
   const classes = ["fig-half", `is-${line.kind}`];
   if (footnote !== undefined) classes.push("is-key");
-  if (footnote !== undefined && footnote === marks.props.hoveredNote) classes.push("is-hovered");
+  if (footnote !== undefined && footnote === marks.props.notes?.hovered) classes.push("is-hovered");
+  if (isAskedAbout(line, marks.props)) classes.push("is-asked");
   if (marks.drafts.has(lineKey(lineRefOf(line)))) classes.push("has-draft");
   if (marks.pickedLines.has(line)) classes.push("is-picked");
   return classes.join(" ");
@@ -117,18 +139,19 @@ function linesOf(row: SplitRow): DiffLine[] {
   return [row.left, row.right].filter((line, lineIndex, lines): line is DiffLine => line !== undefined && lines.indexOf(line) === lineIndex);
 }
 
-function footnoteOfRow(row: SplitRow, props: FigureProps): number | undefined {
-  return linesOf(row).map(props.footnoteAt).find((footnote) => footnote !== undefined);
+function firstFound(row: SplitRow, find: (line: DiffLine) => number | undefined): number | undefined {
+  return linesOf(row).map(find).find((footnote) => footnote !== undefined);
 }
 
 /** Old code on the left, new code on the right. */
 function SplitRowView({ row, marks }: { row: SplitRow; marks: LineMarks }) {
   const { props } = marks;
-  const footnote = footnoteOfRow(row, props);
-  const hoverNote = (number: number | null) => footnote !== undefined && props.onHoverNote(number);
+  const footnote = firstFound(row, (line) => footnoteCovering(line, props));
+  const startingNote = firstFound(row, (line) => footnoteStartingAt(line, props));
+  const hoverNote = (number: number | null) => footnote !== undefined && props.notes?.onHover(number);
   return (
     <>
-      <div className="fig-row" id={footnote !== undefined ? noteRowId(stepIndexOf(props.figure), footnote) : undefined}
+      <div className="fig-row" id={startingNote !== undefined ? noteRowId(stepIndexOf(props.figure), startingNote) : undefined}
         onMouseOver={() => hoverNote(footnote!)} onMouseOut={() => hoverNote(null)}>
         <HalfLine line={row.left} side="left" marks={marks} />
         <HalfLine line={row.right} side="right" marks={marks} />
@@ -174,6 +197,9 @@ function BelowRow({ line, props, draft }: { line: DiffLine; props: FigureProps; 
       {isComposerHere ? (
         <Composer key={lineKey(point)} session={session} target={session.composer!} draftId={draft?.id} initialText={draft?.body ?? ""} />
       ) : null}
+      {questionsBelow(line, props).map((question) => (
+        <div key={question.id} className="fig-question"><QuestionBlock session={session} file={figure.file} question={question} /></div>
+      ))}
     </>
   );
 }
@@ -182,8 +208,8 @@ function isPinnedBy(props: FigureProps, drafts: Map<string, PlacedComment>) {
   return (line: DiffLine) => {
     const point = lineRefOf(line);
     const isOpenHere = props.session.composer?.file === props.figure.file && isLineAt(line, props.session.composer);
-    const isAskedAbout = props.figure.questionsAfter.some((question) => isLineAt(line, anchorLine(question)));
-    return props.footnoteAt(line) !== undefined || drafts.has(lineKey(point)) || isOpenHere || isAskedAbout;
+    const isAsked = props.figure.questionsAfter.some((question) => isLineInRange(line, rangeOf(question)));
+    return footnoteCovering(line, props) !== undefined || drafts.has(lineKey(point)) || isOpenHere || isAsked;
   };
 }
 

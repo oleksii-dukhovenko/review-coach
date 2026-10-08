@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { parseUnifiedDiff } from "../server/diff.ts";
-import type { DiffFile } from "../server/types.ts";
+import type { DiffFile, DiffLine } from "../server/types.ts";
 import type { Guide, WalkthroughData } from "../web/src/api.ts";
-import { attentionItems, buildSteps, foldRows } from "../web/src/essay/model.ts";
+import { attentionItems, buildSteps, firstShownLine, foldRows, isLineInRange, rangeLabel, rangeOf } from "../web/src/essay/model.ts";
 
 function fileFrom(patch: string, tag: DiffFile["tag"] = "normal"): DiffFile {
   return { ...parseUnifiedDiff(patch)[0], tag, tagReason: "" };
@@ -105,5 +105,23 @@ describe("attentionItems", () => {
   it("ranks real problems first and ends with the low-risk step", () => {
     const items = attentionItems(buildSteps(data, guide), data.walkthrough.hardIdeas);
     expect(items.map((item) => [item.title, item.isLowRisk])).toEqual([["Tax", false], ["Rates are floats", false], ["Deps is low-risk", true]]);
+  });
+});
+
+describe("note ranges", () => {
+  const added = (newLine: number): DiffLine => ({ kind: "add", oldLine: null, newLine, text: "" });
+  const range = rangeOf({ line: 78, endLine: 84, side: "RIGHT" as const });
+
+  it("covers every line from first to last", () => {
+    expect([77, 78, 81, 84, 85].map((number) => isLineInRange(added(number), range))).toEqual([false, true, true, true, false]);
+  });
+
+  it("lines a note up with the first line a figure shows", () => {
+    expect(firstShownLine([added(70), added(80), added(81)], range)?.newLine).toBe(80);
+  });
+
+  it("labels one line or a range", () => {
+    expect(rangeLabel(range)).toBe("lines 78–84");
+    expect(rangeLabel(rangeOf({ line: 81, endLine: 81, side: "RIGHT" as const }))).toBe("line 81");
   });
 });

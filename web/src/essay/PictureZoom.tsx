@@ -152,7 +152,7 @@ function NodeCode({ node, session, data, onChangeKnown }: NodeCodeProps) {
   if (error) return <p className="muted">Could not read {node.file}: {error}</p>;
   if (!view) return <p className="muted">Opening {node.file}…</p>;
   if (!diff || change === "existing") return <PlainCode node={node} view={view} />;
-  return <CodeFigure figure={rangeFigure(node, lines)} diff={diff} session={session} footnoteAt={() => undefined} hoveredNote={null} onHoverNote={() => undefined} />;
+  return <CodeFigure figure={rangeFigure(node, lines)} diff={diff} session={session} />;
 }
 
 type BodyProps = { zoom: Zoom; lookup: NodeLookup; session: ReviewSession; data: WalkthroughData; onChangeKnown: (change: NodeChange) => void };

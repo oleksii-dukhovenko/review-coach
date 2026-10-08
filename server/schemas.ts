@@ -38,8 +38,8 @@ const hardIdea = z.object({
 });
 
 const teachingNote = z.object({
-  line: z.number().int(),
-  endLine: z.number().int().describe("Last line the note is about. Same as line for one line."),
+  line: z.number().int().describe("The line that shows the idea, e.g. the `return false`, not the start of its function"),
+  endLine: z.number().int().describe("Last line the note is about. Same as line unless the idea truly spans lines; max 5 lines."),
   side,
   kind: z.enum(["syntax", "pattern", "design"]),
   conceptKey: z.string().describe("kebab-case id, e.g. go-defer, sql-transaction"),

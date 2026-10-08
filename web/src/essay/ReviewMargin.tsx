@@ -7,7 +7,7 @@ import { Icon } from "../components/Icon.tsx";
 import { allReviewComments, confirmedProblems, summaryWithOutdated, type ConfirmedProblem } from "../pages/FinishPanel.tsx";
 import type { PlacedComment } from "../placeComments.ts";
 import { noteRowId } from "./CodeFigure.tsx";
-import type { EssayStep, Footnote } from "./model.ts";
+import { rangeLabel, rangeOf, type EssayStep, type Footnote } from "./model.ts";
 import type { ReviewSession } from "./session.ts";
 
 const NOTE_GAP_PX = 18;
@@ -33,9 +33,10 @@ function Sidenote({ session, file, footnote, isHovered, onHover }: NoteProps) {
   const chatKey = noteChatKey(file, footnote);
   const chat = session.state.explainChats[chatKey];
   const concept = session.conceptsByKey.get(note.conceptKey);
-  const lastLine = Math.max(note.endLine ?? note.line, note.line);
+  const range = rangeOf(note);
+  const span = { line: range.lastLine, side: range.side, startLine: range.firstLine, startSide: range.side };
   const fuzzy = useStillFuzzy({
-    subject: { route: session.route, file, span: { line: lastLine, side: note.side }, topic: `the idea "${note.title}"` },
+    subject: { route: session.route, file, span, topic: `the idea "${note.title}"` },
     alreadySaid: alreadySaid(footnote), chat, onChatChange: (updated) => session.saveExplainChat(chatKey, updated),
     onMarkFuzzy: () => session.saveConcept(note, "fuzzy"),
   });
@@ -50,7 +51,7 @@ function Sidenote({ session, file, footnote, isHovered, onHover }: NoteProps) {
           {note.jsExample ? <pre className="code-block"><span className="code-label">In JS</span>{note.jsExample}</pre> : null}
         </div>
       ) : null}
-      <button className="line-ref" onClick={() => session.openLine(file, lastLine, note.side)}>→ line {lastLine}</button>
+      <button className="line-ref" onClick={() => session.openLine(file, range.firstLine, range.side)}>→ {rangeLabel(range)}</button>
       <div className="sidenote-actions">
         {isLearned ? <span className="small-caps accent-text">You know this</span> : <button className="btn btn-ghost btn-small" onClick={() => session.saveConcept(note, "learned")}>Got it</button>}
         <button className="btn btn-ghost btn-small" onClick={fuzzy.markFuzzy}>Still fuzzy</button>

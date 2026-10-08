@@ -54,6 +54,33 @@ export function isLineAt(line: DiffLine, point: { line: number; side: Side }): b
   return point.side === "LEFT" ? line.kind === "del" && line.oldLine === point.line : line.kind !== "del" && line.newLine === point.line;
 }
 
+export type LineRange = { firstLine: number; lastLine: number; side: Side };
+
+/** Every line a note or question covers. */
+export function rangeOf(item: Anchored): LineRange {
+  const endLine = item.endLine ?? item.line;
+  return { firstLine: Math.min(item.line, endLine), lastLine: Math.max(item.line, endLine), side: item.side };
+}
+
+function numberOnSide(line: DiffLine, side: Side): number | null {
+  if (side === "LEFT") return line.kind === "del" ? line.oldLine : null;
+  return line.kind === "del" ? null : line.newLine;
+}
+
+export function isLineInRange(line: DiffLine, range: LineRange): boolean {
+  const number = numberOnSide(line, range.side);
+  return number !== null && number >= range.firstLine && number <= range.lastLine;
+}
+
+/** The first line of the range that a figure shows, where its note lines up. */
+export function firstShownLine(lines: DiffLine[], range: LineRange): DiffLine | undefined {
+  return lines.find((line) => isLineInRange(line, range));
+}
+
+export function rangeLabel(range: LineRange): string {
+  return range.firstLine === range.lastLine ? `line ${range.firstLine}` : `lines ${range.firstLine}–${range.lastLine}`;
+}
+
 function newSideRange(lines: DiffLine[]): { firstLine: number; lastLine: number } {
   const numbers = lines.map((line) => line.newLine ?? line.oldLine ?? 0).filter((number) => number > 0);
   return { firstLine: Math.min(...numbers), lastLine: Math.max(...numbers) };

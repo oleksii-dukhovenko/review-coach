@@ -639,9 +639,15 @@ div.step-code { padding: 10px; }
 .fig-half.is-del { background: var(--color-accent-2-100); }
 .fig-half.is-del .fig-number { color: var(--color-accent-2-700); }
 .fig-half.is-empty { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
-.fig-half.is-key, .fig-half.has-draft, .fig-half.is-picked { background: var(--color-accent-200); }
-.fig-half.is-key .code { font-weight: 600; }
+.fig-half.has-draft, .fig-half.is-picked { background: var(--color-accent-200); }
+.fig-half.is-key { box-shadow: inset 3px 0 0 var(--color-accent); }
+.fig-half.is-asked { box-shadow: inset 3px 0 0 var(--color-accent-2); }
 .fig-half.is-hovered { background: var(--color-accent-300); }
+.fig-question {
+  background: var(--color-bg); margin: 6px 10px; padding: 4px 20px; border-radius: var(--radius-md);
+  box-shadow: inset 3px 0 0 var(--color-accent-2); font-family: var(--font-body); white-space: normal; cursor: auto;
+}
+.fig-question .q-block { margin: 14px 0; }
 .fig-gutter { display: grid; place-items: center; cursor: pointer; color: var(--color-accent-700); user-select: none; }
 .fig-half:hover .fig-gutter:empty::after { content: "+"; color: var(--color-neutral-400); }
 .fig-number { text-align: right; color: var(--color-neutral-600); padding-right: 10px; user-select: none; cursor: pointer; }

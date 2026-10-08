@@ -53,7 +53,7 @@ function FileChanges({ listed, session }: { listed: ListedFile; session: ReviewS
       </label>
       {diff.isBinary ? <p className="small muted">Binary file, no text diff.</p> : null}
       {file.figures.map((figure) => (
-        <CodeFigure key={figure.id} figure={figure} diff={diff} session={session} footnoteAt={() => undefined} hoveredNote={null} onHoverNote={() => undefined} />
+        <CodeFigure key={figure.id} figure={figure} diff={diff} session={session} />
       ))}
     </section>
   );
