@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { languageVersionOf, packageNameOf, parsePubspecLock } from "../server/dartPackages.ts";
 import { languageForFile } from "../server/languageServers.ts";
 import { frame, FrameReader, toLocations } from "../server/lspClient.ts";
-import { withHouseStyle } from "../web/src/components/Mermaid.tsx";
+import { withHouseStyle } from "../web/src/components/mermaidStyle.ts";
 import { identifierAround } from "../web/src/components/wordAtPoint.ts";
 
 describe("FrameReader", () => {

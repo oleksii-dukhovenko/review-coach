@@ -1,29 +1,28 @@
 import { useEffect, useId, useRef, useState } from "react";
 
-// - Keep in sync with --added / --changed in styles.css.
-const HOUSE_CLASSES = [
-  "classDef added fill:#cbeeff,stroke:#0088b0,color:#0a303e,stroke-width:1.5px",
-  "classDef changed fill:#ffdee6,stroke:#d6006c,color:#4b1528,stroke-width:1.5px",
-];
-
-function isFlowchart(source: string): boolean {
-  return /^\s*(flowchart|graph)\b/.test(source);
-}
-
-/** Adds the added/changed colors, and drops click and style lines. */
-export function withHouseStyle(source: string): string {
-  const safeLines = source.split("\n").filter((line) => !/^\s*(click|classDef|style)\b/.test(line));
-  const classLines = isFlowchart(source) ? HOUSE_CLASSES : [];
-  return [...safeLines, ...classLines].join("\n");
-}
+import { useTheme } from "../theme.ts";
+import { withHouseStyle } from "./mermaidStyle.ts";
 
 let mermaidLoader: Promise<typeof import("mermaid").default> | undefined;
 
-// - Keep in sync with the Broadsheet tokens.
-const HOUSE_THEME = {
-  primaryColor: "#eae9e9", primaryBorderColor: "#bab6b6", primaryTextColor: "#201e1d", lineColor: "#9b9797",
-  edgeLabelBackground: "#f3f2f2", fontFamily: "\"Source Serif 4\", Georgia, serif", fontSize: "14px",
-};
+function token(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/** Diagram colors read from the page's tokens, so they follow the theme. */
+function themeVariables() {
+  return {
+    primaryColor: token("--color-surface"), primaryBorderColor: token("--color-neutral-400"), primaryTextColor: token("--color-text"),
+    lineColor: token("--color-neutral-500"), edgeLabelBackground: token("--color-bg"),
+    fontFamily: "\"Source Serif 4\", Georgia, serif", fontSize: "14px",
+  };
+}
+
+function themeClasses(): string[] {
+  const added = `fill:${token("--color-accent-200")},stroke:${token("--color-accent")},color:${token("--color-accent-900")}`;
+  const changed = `fill:${token("--color-accent-2-200")},stroke:${token("--color-accent-2")},color:${token("--color-accent-2-900")}`;
+  return [`classDef added ${added},stroke-width:1.5px`, `classDef changed ${changed},stroke-width:1.5px`];
+}
 
 /** Waits for the page font, so labels are measured at their real width. */
 async function importAfterFonts() {
@@ -31,18 +30,18 @@ async function importAfterFonts() {
   return (await import("mermaid")).default;
 }
 
-function loadMermaid() {
-  mermaidLoader ??= importAfterFonts().then((mermaid) => {
-    mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: "strict",
-      theme: "base",
-      themeVariables: HOUSE_THEME,
-      flowchart: { curve: "basis", padding: 14, htmlLabels: true },
-    });
-    return mermaid;
+/** Loads Mermaid once, and sets it up for the current theme on every call. */
+async function loadMermaid() {
+  mermaidLoader ??= importAfterFonts();
+  const mermaid = await mermaidLoader;
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: "strict",
+    theme: "base",
+    themeVariables: themeVariables(),
+    flowchart: { curve: "basis", padding: 14, htmlLabels: true },
   });
-  return mermaidLoader;
+  return mermaid;
 }
 
 type RenderState = { svg: string } | { error: string } | undefined;
@@ -85,12 +84,13 @@ export function Mermaid({ source, className = "", onNodeClick }: MermaidProps) {
   const diagramId = `diagram-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const container = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<RenderState>();
+  const { theme } = useTheme();
   useEffect(() => {
     if (!source.trim()) return;
     loadMermaid()
-      .then((mermaid) => mermaid.render(diagramId, withHouseStyle(source)))
+      .then((mermaid) => mermaid.render(diagramId, withHouseStyle(source, themeClasses())))
       .then(({ svg }) => setState({ svg }), (error: Error) => setState({ error: error.message }));
-  }, [source]);
+  }, [source, theme]);
   useNodeClicks(container, state && "svg" in state ? state.svg : undefined, onNodeClick);
   if (!source.trim() || !state) return null;
   if ("error" in state) return <details className="diagram-error small muted"><summary>The picture could not be drawn</summary><pre>{source}</pre></details>;

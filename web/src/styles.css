@@ -71,6 +71,11 @@ a:hover { text-decoration: underline; }
 .brand:hover { text-decoration: none; }
 .topbar-link { color: var(--text-muted); font-size: 14px; font-weight: 500; }
 .topbar-link:hover { color: var(--text); text-decoration: none; }
+.topbar-spacer { flex: 1; }
+.theme-picker { display: inline-flex; gap: 2px; }
+.theme-picker button { all: unset; cursor: pointer; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-md); color: var(--color-neutral-600); }
+.theme-picker button:hover { background: color-mix(in srgb, var(--color-text) 8%, transparent); color: var(--color-text); }
+.theme-picker button.is-chosen { color: var(--color-accent-700); background: var(--color-accent-100); }
 .content { max-width: 1560px; margin: 0 auto; padding: 24px 16px 96px; }
 
 h1 { font-size: 26px; line-height: 1.25; margin: 0 0 8px; letter-spacing: -0.02em; font-weight: 700; }
@@ -729,7 +734,7 @@ div.step-code { padding: 10px; }
 .your-review { display: flex; flex-direction: column; gap: 14px; background: var(--color-bg); padding-top: 12px; margin-top: auto; }
 .your-review.is-sticky { position: sticky; bottom: 0; padding-bottom: 16px; }
 .your-review-title { font: 600 19px var(--font-heading); }
-.draft-list { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; max-height: 40vh; overflow-y: auto; }
+.draft-list { display: flex; flex-direction: column; gap: 14px; max-height: 40vh; overflow-y: auto; }
 .essay-article .draft-list { max-height: none; }
 .draft-item { all: unset; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
 .draft-item .mono { font-size: 12px; }

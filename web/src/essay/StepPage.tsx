@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { WalkthroughData } from "../api.ts";
 import { Markdown } from "../components/basics.tsx";
 import { Icon } from "../components/Icon.tsx";
+import { ThemePicker } from "../components/ThemePicker.tsx";
 import { useActiveAnchor } from "../activeAnchor.ts";
 import { CodeFigure } from "./CodeFigure.tsx";
 import type { EssayFile, EssayStep, Footnote, QuestionData } from "./model.ts";
@@ -97,6 +98,7 @@ export function Rail({ session, steps, place, goTo, currentFile }: { session: Re
         <li className={`rail-step ${place.isFinish ? "is-current" : ""}`}><span className="rail-number">{steps.length + 1}</span><button className="rail-link" onClick={() => goTo({ kind: "finish" })}>Finish &amp; verdict</button></li>
       </ol>
       <ReadingProgress steps={steps} step={step} session={session} />
+      <ThemePicker />
     </nav>
   );
 }

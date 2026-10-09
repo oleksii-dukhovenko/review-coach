@@ -70,6 +70,51 @@
   --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
 }
 
+/* Dark: the same ramps, reversed, so light tints become dark tints and ink becomes light. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #161514;
+  --color-surface: #22201f;
+  --color-text: #ece8e6;
+  --color-accent: #38a6cf;
+  --color-accent-2: #ff458e;
+  --color-divider: color-mix(in srgb, #ece8e6 16%, transparent);
+
+  --color-neutral-100: #2d2b2b;
+  --color-neutral-200: #444141;
+  --color-neutral-300: #605d5d;
+  --color-neutral-400: #7d7979;
+  --color-neutral-500: #9b9797;
+  --color-neutral-600: #bab6b6;
+  --color-neutral-700: #d7d3d3;
+  --color-neutral-800: #eae7e7;
+  --color-neutral-900: #f8f4f4;
+
+  --color-accent-100: #0e2731;
+  --color-accent-200: #0a303e;
+  --color-accent-300: #004961;
+  --color-accent-400: #006786;
+  --color-accent-500: #1186ac;
+  --color-accent-600: #38a6cf;
+  --color-accent-700: #62c5ee;
+  --color-accent-800: #99e0ff;
+  --color-accent-900: #cbeeff;
+
+  --color-accent-2-100: #2c1219;
+  --color-accent-2-200: #4b1528;
+  --color-accent-2-300: #790e3d;
+  --color-accent-2-400: #aa0b56;
+  --color-accent-2-500: #d82071;
+  --color-accent-2-600: #ff458e;
+  --color-accent-2-700: #ff90b1;
+  --color-accent-2-800: #ffc0d0;
+  --color-accent-2-900: #ffdee6;
+
+  --shadow-sm: 0 0 0 1px color-mix(in srgb, #ece8e6 8%, transparent);
+  --shadow-md: 0 0 0 1px color-mix(in srgb, #ece8e6 10%, transparent), 0 6px 18px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 0 0 1px color-mix(in srgb, #ece8e6 12%, transparent), 0 16px 40px rgb(0 0 0 / 0.5);
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-text);

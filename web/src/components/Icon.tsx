@@ -26,6 +26,9 @@ const PHOSPHOR = {
   github: "github-logo",
   plus: "plus",
   files: "files",
+  sun: "sun",
+  moon: "moon",
+  desktop: "desktop",
   magnifyPlus: "magnifying-glass-plus",
 } as const;
 

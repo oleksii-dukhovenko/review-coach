@@ -233,19 +233,14 @@ function DraftCount({ count, canPost }: { count: number; canPost: boolean }) {
   return <>{count} draft{count === 1 ? "" : "s"} · {canPost ? "not yet sent" : "your own PR, nothing is posted"}</>;
 }
 
-/** Docked at the bottom of the margin, the draft list folds away so it never hides the notes. */
-function DraftList({ drafts, canPost, isDocked }: { drafts: Draft[]; canPost: boolean; isDocked: boolean }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const isFoldable = isDocked && drafts.length > 0;
-  const showsDrafts = isOpen || !isFoldable;
+type Fold = { isFoldable: boolean; isOpen: boolean; toggle: () => void };
+
+function DraftHeader({ count, canPost, fold }: { count: number; canPost: boolean; fold: Fold }) {
   return (
-    <>
-      <div className="small muted">
-        <DraftCount count={drafts.length} canPost={canPost} />
-        {isFoldable ? <> · <button className="text-link" onClick={() => setIsOpen(!isOpen)}>{isOpen ? "hide" : "show"}</button></> : null}
-      </div>
-      {showsDrafts ? <div className="draft-list">{drafts.map((draft) => <DraftItem key={draft.key} draft={draft} />)}</div> : null}
-    </>
+    <div className="small muted">
+      <DraftCount count={count} canPost={canPost} />
+      {fold.isFoldable ? <> · <button className="text-link" onClick={fold.toggle}>{fold.isOpen ? "hide" : "show"}</button></> : null}
+    </div>
   );
 }
 
@@ -257,13 +252,18 @@ export function YourReview({ session, data, canPost, isDocked = true }: YourRevi
   const posting = useSubmit(session, data);
   const verdict = session.state.verdict ?? "COMMENT";
   const isSticky = isDocked && drafts.length > 0;
+  const [isOpen, setIsOpen] = useState(false);
+  // - Docked at the bottom of the margin, the body folds away so it never hides the notes.
+  const fold = { isFoldable: isSticky, isOpen, toggle: () => setIsOpen(!isOpen) };
+  const showsBody = isOpen || !isSticky;
   return (
     <div className={`your-review ${isSticky ? "is-sticky" : ""}`} id="your-review">
       <div>
         <div className="your-review-title">{canPost ? "Your review" : "Your notes"}</div>
-        <DraftList drafts={drafts} canPost={canPost} isDocked={isDocked} />
+        <DraftHeader count={drafts.length} canPost={canPost} fold={fold} />
       </div>
-      {canPost ? (
+      {showsBody && drafts.length ? <div className="draft-list">{drafts.map((draft) => <DraftItem key={draft.key} draft={draft} />)}</div> : null}
+      {canPost && showsBody ? (
         <>
           <div className="seg" role="radiogroup" aria-label="Verdict">
             {VERDICTS.map((option) => (

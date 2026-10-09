@@ -5,6 +5,7 @@ import { AutoUpdateToggle } from "../components/AutoUpdateToggle.tsx";
 import { ErrorBanner } from "../components/basics.tsx";
 import { Icon } from "../components/Icon.tsx";
 import { OpenInNeovim } from "../components/OpenInNeovim.tsx";
+import { ThemePicker } from "../components/ThemePicker.tsx";
 import { Working } from "../components/Working.tsx";
 import { EssayReview } from "../essay/EssayReview.tsx";
 import type { EssayView } from "../essay/session.ts";
@@ -92,6 +93,7 @@ function PrActions({ page, onRebuild }: { page: PrPageData; onRebuild: () => voi
       <AutoUpdateToggle route={pr} isOn={page.autoUpdate} />
       {isAnyJobReady(page) ? <button className="btn btn-ghost btn-small btn-quiet" onClick={onRebuild} title="Write everything again from scratch">Start over</button> : null}
       <OpenInNeovim route={pr} />
+      <ThemePicker />
       <a className="btn btn-secondary btn-small" href={pr.url} target="_blank" rel="noreferrer"><Icon name="github" size={15} /> GitHub</a>
     </div>
   );
