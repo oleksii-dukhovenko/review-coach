@@ -15,8 +15,18 @@ export function sectionOf(pr: PullRequest): MyPrSection {
   return "waiting-on-others";
 }
 
-/** Drafts and comments for me get built right away; the rest wait for Prepare. */
-export function isBuiltAutomatically(pr: PullRequest): boolean {
-  if (pr.kind === "review") return true;
-  return pr.isDraft || pr.openThreads.length > 0;
+// - off: only Prepare clicks spend tokens. reviews: PRs I am asked to review. all: those plus my drafts and comments.
+export type AutoPrepare = "off" | "reviews" | "all";
+
+export const AUTO_PREPARE_MODES: AutoPrepare[] = ["off", "reviews", "all"];
+
+function needsMe(pr: PullRequest): boolean {
+  return pr.kind === "review" || pr.isDraft || pr.openThreads.length > 0;
+}
+
+/** Whether a PR gets built without a Prepare click, under the chosen setting. */
+export function isBuiltAutomatically(pr: PullRequest, mode: AutoPrepare): boolean {
+  if (mode === "off") return false;
+  if (mode === "reviews") return pr.kind === "review";
+  return needsMe(pr);
 }

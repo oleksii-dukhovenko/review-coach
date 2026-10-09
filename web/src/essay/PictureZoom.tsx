@@ -22,18 +22,21 @@ function motionMs(): number {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : ZOOM_MS;
 }
 
-/** Where each box lives in the code; asks the server once if the build has no map yet. */
-function usePictureNodes(route: PrRoute, picture: Picture): NodeLookup {
+/** Where each box lives in the code; on older builds it asks Claude on the first click, never before. */
+function usePictureNodes(route: PrRoute, picture: Picture): { lookup: NodeLookup; findNodes: () => void } {
   const known = picture.nodes ?? [];
-  const [lookup, setLookup] = useState<NodeLookup>({ nodes: known, isLoading: known.length === 0, error: null });
-  useEffect(() => {
-    if (known.length > 0) return;
+  const [lookup, setLookup] = useState<NodeLookup>({ nodes: known, isLoading: false, error: null });
+  const hasAsked = useRef(known.length > 0);
+  const findNodes = () => {
+    if (hasAsked.current) return;
+    hasAsked.current = true;
+    setLookup({ nodes: [], isLoading: true, error: null });
     api.pictureNodes(route).then(
       (nodes) => setLookup({ nodes, isLoading: false, error: null }),
       (error: Error) => setLookup({ nodes: [], isLoading: false, error: error.message }),
     );
-  }, [picture.diagram]);
-  return lookup;
+  };
+  return { lookup, findNodes };
 }
 
 /** Dives the camera into the clicked box, or back out of it. */
@@ -159,7 +162,7 @@ type BodyProps = { zoom: Zoom; lookup: NodeLookup; session: ReviewSession; data:
 
 function ZoomBody({ zoom, lookup, session, data, onChangeKnown }: BodyProps) {
   const node = lookup.nodes.find((candidate) => candidate.id === zoom.clicked.id);
-  if (lookup.isLoading) return <p className="muted">Finding this box in the code. The first time takes about a minute.</p>;
+  if (lookup.isLoading) return <p className="muted">Finding this box in the code. This happens once per PR.</p>;
   if (lookup.error) return <p className="muted">Could not find this box in the code: {lookup.error}</p>;
   if (!node?.file) return <p className="muted">This box is not code in this repo, so there is nothing to look inside.</p>;
   return <NodeCode node={node} session={session} data={data} onChangeKnown={onChangeKnown} />;
@@ -234,13 +237,14 @@ async function zoomOut(layer: HTMLElement, camera: HTMLElement, zoom: Zoom) {
 /** The big picture: click a box to dive into the code behind it. */
 export function ZoomablePicture({ session, data }: { session: ReviewSession; data: WalkthroughData }) {
   const picture = data.walkthrough.picture;
-  const lookup = usePictureNodes(session.route, picture);
+  const { lookup, findNodes } = usePictureNodes(session.route, picture);
   const camera = useRef<HTMLDivElement>(null);
   const layer = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState<Zoom | null>(null);
   useScrollLock(zoom !== null);
   const open = useCallback((clicked: ClickedNode) => {
     const from = clicked.element.getBoundingClientRect();
+    findNodes();
     moveCamera(camera.current!, from, true);
     setZoom({ clicked, from });
   }, []);

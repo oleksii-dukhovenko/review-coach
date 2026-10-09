@@ -160,6 +160,7 @@ textarea { min-height: 72px; resize: vertical; }
   background: var(--color-accent-2-100); border-radius: var(--radius-md); font-size: 14px; color: var(--color-accent-2-800);
 }
 .guide-status { margin: 12px 0 0; }
+.auto-prepare { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 14px 0 0; }
 .rewrite-notes { color: var(--color-neutral-700); }
 
 /* On/off switch */

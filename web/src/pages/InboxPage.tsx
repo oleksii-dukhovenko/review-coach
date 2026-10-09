@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { api, type Inbox, type InboxRow, type MyPrSection } from "../api.ts";
+import { api, type AutoPrepare, type Inbox, type InboxRow, type MyPrSection } from "../api.ts";
 import { AutoUpdateToggle } from "../components/AutoUpdateToggle.tsx";
 import { ErrorBanner } from "../components/basics.tsx";
 import { Icon } from "../components/Icon.tsx";
@@ -127,6 +127,31 @@ function PreparingNote({ rows }: { rows: InboxRow[] }) {
   );
 }
 
+const AUTO_PREPARE_OPTIONS: { mode: AutoPrepare; label: string; hint: string }[] = [
+  { mode: "off", label: "Off", hint: "Nothing uses Claude until you click Prepare." },
+  { mode: "reviews", label: "Reviews for me", hint: "PRs you are asked to review get prepared on their own." },
+  { mode: "all", label: "Everything that needs me", hint: "Reviews for you, plus your drafts and PRs with comments waiting on you." },
+];
+
+/** How much gets prepared without a click, since each walkthrough uses Claude tokens. */
+function AutoPrepareSetting({ mode, onChange }: { mode: AutoPrepare; onChange: (mode: AutoPrepare) => void }) {
+  const chosen = AUTO_PREPARE_OPTIONS.find((option) => option.mode === mode);
+  return (
+    <div className="auto-prepare">
+      <span className="small-caps">Prepare automatically</span>
+      <div className="seg" role="radiogroup" aria-label="Prepare automatically">
+        {AUTO_PREPARE_OPTIONS.map((option) => (
+          <label key={option.mode} className="seg-opt">
+            <input type="radio" name="auto-prepare" checked={mode === option.mode} onChange={() => onChange(option.mode)} />
+            {option.label}
+          </label>
+        ))}
+      </div>
+      <span className="small muted">{chosen?.hint}</span>
+    </div>
+  );
+}
+
 function PausedBanner({ onResume }: { onResume: () => void }) {
   return (
     <div className="banner">
@@ -158,6 +183,7 @@ export function InboxPage() {
 
   const prepare = (row: InboxRow) => void api.prepare(row).then(load);
   const resume = () => void api.resumeQueue().then(load);
+  const changeAutoPrepare = (mode: AutoPrepare) => void api.setAutoPrepare(mode).then(load);
 
   if (!inbox) return <p className="muted">{error ?? "Loading..."}</p>;
   return (
@@ -171,6 +197,7 @@ export function InboxPage() {
           <Icon name="refresh" size={14} /> {isRefreshing ? "Checking..." : "Check now"}
         </button>
       </div>
+      <AutoPrepareSetting mode={inbox.autoPrepare} onChange={changeAutoPrepare} />
       <ErrorBanner message={error} />
       {inbox.lastPollError ? <div className="banner error">Could not reach GitHub. Showing the last list. ({inbox.lastPollError})</div> : null}
       {inbox.paused ? <PausedBanner onResume={resume} /> : null}

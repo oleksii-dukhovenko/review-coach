@@ -2,7 +2,7 @@ import { removeCheckout } from "./checkout.ts";
 import { autoUpdateSettingKey, deletePrEverywhere, getJob, getSetting, hidePrFromInbox, listInboxPrs, saveSetting, savePr, type JobKind } from "./db.ts";
 import { fetchPrState, fetchPullRequest, searchMyOpenPrs, searchReviewRequests } from "./github.ts";
 import { isOutOfDate, mainJobKinds } from "./jobKinds.ts";
-import { isBuiltAutomatically } from "./myPrSections.ts";
+import { AUTO_PREPARE_MODES, isBuiltAutomatically, type AutoPrepare } from "./myPrSections.ts";
 import { enqueue } from "./queue.ts";
 import type { PrKind, PullRequest } from "./types.ts";
 
@@ -21,9 +21,20 @@ function isWalkthroughReady(pr: PullRequest): boolean {
   return getJob(pr.key, "walkthrough")?.status === "ready";
 }
 
-/** Prepares ahead only what you will almost always open. */
+export function autoPrepareMode(): AutoPrepare {
+  const saved = getSetting("autoPrepare") as AutoPrepare | undefined;
+  return saved && AUTO_PREPARE_MODES.includes(saved) ? saved : "off";
+}
+
+export function setAutoPrepareMode(mode: AutoPrepare): void {
+  if (!AUTO_PREPARE_MODES.includes(mode)) throw new Error(`Unknown mode ${mode}`);
+  saveSetting("autoPrepare", mode);
+}
+
+/** Prepares ahead only what the "Prepare automatically" setting allows. */
 function queueFirstBuilds(prs: PullRequest[]): void {
-  for (const pr of prs.filter(isBuiltAutomatically)) {
+  const mode = autoPrepareMode();
+  for (const pr of prs.filter((candidate) => isBuiltAutomatically(candidate, mode))) {
     const unbuiltKinds = mainJobKinds(pr).filter((kind) => hasNeverBeenBuilt(pr, kind));
     unbuiltKinds.forEach((kind) => enqueue({ prKey: pr.key, kind }));
     const needsGuide = isWalkthroughReady(pr) && hasNeverBeenBuilt(pr, "guide");

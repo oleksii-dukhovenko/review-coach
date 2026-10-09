@@ -31,9 +31,21 @@ describe("sectionOf", () => {
 });
 
 describe("isBuiltAutomatically", () => {
-  it("builds drafts and PRs with comments for me, not ones waiting on others", () => {
-    expect(isBuiltAutomatically(myPr({ isDraft: true }))).toBe(true);
-    expect(isBuiltAutomatically(myPr({ openThreads: [thread] }))).toBe(true);
-    expect(isBuiltAutomatically(myPr({}))).toBe(false);
+  const reviewRequest = myPr({ kind: "review" });
+
+  it("builds nothing when the setting is off", () => {
+    expect(isBuiltAutomatically(reviewRequest, "off")).toBe(false);
+    expect(isBuiltAutomatically(myPr({ isDraft: true }), "off")).toBe(false);
+  });
+
+  it("builds only review requests on reviews", () => {
+    expect(isBuiltAutomatically(reviewRequest, "reviews")).toBe(true);
+    expect(isBuiltAutomatically(myPr({ isDraft: true }), "reviews")).toBe(false);
+  });
+
+  it("builds drafts and PRs with comments for me on all, not ones waiting on others", () => {
+    expect(isBuiltAutomatically(myPr({ isDraft: true }), "all")).toBe(true);
+    expect(isBuiltAutomatically(myPr({ openThreads: [thread] }), "all")).toBe(true);
+    expect(isBuiltAutomatically(myPr({}), "all")).toBe(false);
   });
 });

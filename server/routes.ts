@@ -5,9 +5,9 @@ import { answerQuestion, type Question } from "./ask.ts";
 import { listConcepts, saveConcept, type Concept } from "./concepts.ts";
 
 import { getJob, getPr, getReviewState, getSetting, listAsks, listInboxPrs, saveReviewState } from "./db.ts";
-import { isAutoUpdateOn, refreshAndRecord, setAutoUpdate } from "./inbox.ts";
+import { autoPrepareMode, isAutoUpdateOn, refreshAndRecord, setAutoPrepareMode, setAutoUpdate } from "./inbox.ts";
 import { combinedStatus, isOutOfDate, mainJobKinds, needsPreparing, type MainJobKind } from "./jobKinds.ts";
-import { sectionOf } from "./myPrSections.ts";
+import { sectionOf, type AutoPrepare } from "./myPrSections.ts";
 import { openInEditor } from "./openInEditor.ts";
 import { pictureNodes } from "./pictureMap.ts";
 import { rewriteInPlainWords } from "./plainWords.ts";
@@ -86,7 +86,15 @@ export function buildRoutes(): Hono {
       paused: isPaused(),
       lastPollAt: getSetting("lastPollAt") ?? null,
       lastPollError: getSetting("lastPollError") || null,
+      autoPrepare: autoPrepareMode(),
     });
+  });
+
+  api.put("/settings/auto-prepare", async (context) => {
+    const { mode } = (await context.req.json()) as { mode: AutoPrepare };
+    setAutoPrepareMode(mode);
+    void refreshAndRecord();
+    return context.json({ mode: autoPrepareMode() });
   });
 
   api.post("/inbox/refresh", async (context) => {
