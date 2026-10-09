@@ -128,26 +128,26 @@ export function InlineNotes({ session, file, footnotes, hoveredNote, onHoverNote
   );
 }
 
-/** Offers plainer notes on walkthroughs written before the plain-words rules. */
-export function RewriteNotes({ session, data }: { session: ReviewSession; data: WalkthroughData }) {
+/** Offers plainer notes and questions on walkthroughs written before the plain-words rules. */
+export function RewriteInPlainWords({ session, data }: { session: ReviewSession; data: WalkthroughData }) {
   const [isRewriting, setIsRewriting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (data.plainNotes) return null;
+  if (data.plainNotes && data.plainQuestions) return null;
   const rewrite = async () => {
     setIsRewriting(true);
     setError(null);
     try {
-      await api.rewriteNotes(session.route);
+      await api.rewriteInPlainWords(session.route);
       window.location.reload();
     } catch (rewriteError) {
       setError(rewriteError instanceof Error ? rewriteError.message : String(rewriteError));
       setIsRewriting(false);
     }
   };
-  if (isRewriting) return <div className="rewrite-notes small"><Working size={13}>Rewriting every note in plain words. The page reloads when it is done.</Working></div>;
+  if (isRewriting) return <div className="rewrite-notes small"><Working size={13}>Rewriting every note and question in plain words. The page reloads when it is done.</Working></div>;
   return (
     <div className="rewrite-notes small">
-      Notes hard to follow? <button className="text-link" onClick={() => void rewrite()}>Rewrite them in plain words</button>
+      Notes or questions hard to follow? <button className="text-link" onClick={() => void rewrite()}>Rewrite them in plain words</button>
       {error ? <div className="composer-error">Could not rewrite: {error}</div> : null}
     </div>
   );

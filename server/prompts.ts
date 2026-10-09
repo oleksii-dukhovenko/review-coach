@@ -71,6 +71,7 @@ export function walkthroughPrompt(input: WalkthroughInput): string {
   - notes on syntax, patterns, or design choices the reader may not know, anchored to a line. oneLiner first; keep the explanation short;
     the title and oneLiner must make sense to someone who skims them beside the code: say what happens to which named thing, no labels or riddles;
   - coaching questions for real problems and for things worth knowing. Aim for the few that matter most.
+    Write each one for someone who knows nothing about this PR or codebase: say what the code is for first, explain every name.
 - Line numbers: RIGHT side uses new-file lines; LEFT side uses old-file lines of deleted code.
 - The checkout is the PR head. Read surrounding code when the diff is not enough.`,
     untrustedBlock("pr_diff", patchForReview(input.files)),
@@ -206,22 +207,23 @@ export function pictureMapPrompt(input: PictureMapInput): string {
   ].join("\n\n");
 }
 
-export type NoteToRewrite = { id: string; file: string; lines: string; code: string; title: string; oneLiner: string; explanation: string };
+// - fields: the current wording, keyed by field name.
+export type ItemToRewrite = { id: string; file: string; lines: string; code: string; fields: Record<string, string> };
 
-/** Asks for plainer titles and one-liners, keeping each note's meaning. */
-export function noteRewritePrompt(notes: NoteToRewrite[]): string {
-  const described = notes.map((note) => [
-    `### Note ${note.id}: ${note.file} ${note.lines}`,
-    untrustedBlock("code", note.code || "(not in the diff; read the file)"),
-    untrustedBlock("current_title", note.title),
-    untrustedBlock("current_one_liner", note.oneLiner),
-    untrustedBlock("explanation", note.explanation),
-  ].join("\n"));
+function describeItem(kind: string, item: ItemToRewrite): string {
+  const fields = Object.entries(item.fields).map(([name, text]) => untrustedBlock(`current_${name}`, text));
+  return [`### ${kind} ${item.id}: ${item.file} ${item.lines}`, untrustedBlock("code", item.code || "(not in the diff; read the file)"), ...fields].join("\n");
+}
+
+/** Asks for plainer notes and questions, keeping each one's meaning. */
+export function plainWordsPrompt(notes: ItemToRewrite[], questions: ItemToRewrite[]): string {
   return [
-    "These notes sit beside code in a review tool. The reader skims the title and one-liner next to the code.",
-    "Rewrite only the title and one-liner of every note so each says what happens to which named thing in this code.",
-    "Keep the meaning. Use the code and the explanation; read the checkout if you need more. Do not add claims the code does not show.",
-    "Return every note, with its id exactly as given.",
-    ...described,
+    "These notes and questions sit beside code in a review tool. The reader knows nothing about this PR, the feature, or this codebase.",
+    "Rewrite each note's title and one-liner so it says what happens to which named thing in this code.",
+    "Rewrite each question, its answer (because) and its example so a newcomer understands them: say what the code is for first, explain every name.",
+    "Keep the meaning. Use the code; read the checkout if you need more. Do not add claims the code does not show.",
+    "Return every note and every question, with its id exactly as given.",
+    ...notes.map((note) => describeItem("Note", note)),
+    ...questions.map((question) => describeItem("Question", question)),
   ].join("\n\n");
 }

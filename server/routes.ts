@@ -9,10 +9,10 @@ import { isAutoUpdateOn, refreshAndRecord, setAutoUpdate } from "./inbox.ts";
 import { combinedStatus, isOutOfDate, mainJobKinds, needsPreparing, type MainJobKind } from "./jobKinds.ts";
 import { sectionOf } from "./myPrSections.ts";
 import { pictureNodes } from "./pictureMap.ts";
+import { rewriteInPlainWords } from "./plainWords.ts";
 import { replyToThread, submitReview, type ReviewSubmission } from "./posting.ts";
 import { enqueue, isPaused, resumeQueue } from "./queue.ts";
 import { findReferences, isIdentifier, readFileView, readSnippet, warmUpForPr, type ReferenceQuery } from "./references.ts";
-import { rewriteNotes } from "./rewriteNotes.ts";
 import { prKeyOf, type PullRequest } from "./types.ts";
 
 function mainJobs(pr: PullRequest) {
@@ -178,8 +178,8 @@ export function buildRoutes(): Hono {
     return context.json(await readSnippet(requirePr(context), file, line, 7));
   });
 
-  api.post(`${prPath}/rewrite-notes`, async (context) => {
-    await rewriteNotes(requirePr(context).key);
+  api.post(`${prPath}/plain-words`, async (context) => {
+    await rewriteInPlainWords(requirePr(context).key);
     return context.json({ ok: true });
   });
 

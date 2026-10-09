@@ -59,14 +59,29 @@ const teachingNote = z.object({
   jsExample: z.string().describe("JS/Node equivalent, or empty if none"),
 });
 
+const questionText = z.string().describe(
+  "Max 45 words, for a reader who has never seen this PR, this feature, or this codebase. "
+  + "First one plain sentence saying what this code is for, in everyday words. Then the question. "
+  + "Explain every code name in a few words the first time, e.g. '`findRow` (a test helper that finds one table row)'. "
+  + "Never assume the reader read the PR description. Never states the answer.",
+);
+
+const questionBecause = z.string().describe(
+  "The answer in max 2 short sentences, plain words: what goes wrong and for whom, consequence first. Explain any code name you use.",
+);
+
+const questionExample = z.string().describe(
+  "A concrete example in max 3 lines: what someone does, and what happens. A short code snippet only if words cannot show it.",
+);
+
 const coachingQuestion = z.object({
   id: z.string().describe("Unique within this walkthrough, e.g. q1"),
   line: z.number().int(),
   endLine: z.number().int().describe("Last line the question is about. Same as line for one line."),
   side,
-  question: z.string().describe("Max 25 words. Starts with 'Did you notice' or asks what I would do. Never states the answer."),
-  because: z.string().describe("The answer in max 2 short sentences: what goes wrong and for whom, consequence first"),
-  example: z.string().describe("A concrete example in max 3 lines: inputs and what happens, or a short code snippet"),
+  question: questionText,
+  because: questionBecause,
+  example: questionExample,
   severity: z.enum(["problem", "worth-knowing"]),
   source: z.enum(["logic", "style-guide", "readability"]),
   suggestedComment: z.string().describe("GitHub review comment text if I confirm it. Bullets, plain words, no em dashes."),
@@ -102,8 +117,11 @@ const picture = z.object({
   nodes: z.array(pictureNode).describe("Where each box lives in the code: one entry per node in the diagram"),
 });
 
-export const noteRewriteSchema = z.object({
+export const plainWordsSchema = z.object({
   notes: z.array(z.object({ id: z.string().describe("The note id, exactly as given"), title: noteTitle, oneLiner: noteOneLiner })),
+  questions: z.array(z.object({
+    id: z.string().describe("The question id, exactly as given"), question: questionText, because: questionBecause, example: questionExample,
+  })),
 });
 
 export const pictureMapSchema = z.object({ nodes: z.array(pictureNode).describe("One entry per node in the diagram") });
@@ -178,4 +196,4 @@ export const walkthroughUpdateJsonSchema = toClaudeJsonSchema(walkthroughUpdateS
 export const triageJsonSchema = toClaudeJsonSchema(triageSchema);
 export const guideJsonSchema = toClaudeJsonSchema(guideSchema);
 export const pictureMapJsonSchema = toClaudeJsonSchema(pictureMapSchema);
-export const noteRewriteJsonSchema = toClaudeJsonSchema(noteRewriteSchema);
+export const plainWordsJsonSchema = toClaudeJsonSchema(plainWordsSchema);

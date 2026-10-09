@@ -22,8 +22,9 @@ export type WalkthroughData = {
   files: DiffFile[];
   removed: RemovedSymbol[];
   changes?: WalkthroughChange[];
-  // - True once every note follows the plain-words rules.
+  // - True once every note, and every question, follows the plain-words rules.
   plainNotes?: boolean;
+  plainQuestions?: boolean;
 };
 
 export type TriageData = { triage: Triage; files: DiffFile[] };
@@ -84,7 +85,7 @@ export async function buildWalkthrough(pr: PullRequest): Promise<BuiltJob<Walkth
     addDirs: [config.rulesDir, config.conceptsDir],
   });
   const walkthrough = await checkWalkthroughProofs(built.data, lineCounterFor(checkout.worktree, checkout.mergeBase));
-  return { data: { walkthrough, files, removed, plainNotes: true }, sessionId: built.sessionId };
+  return { data: { walkthrough, files, removed, plainNotes: true, plainQuestions: true }, sessionId: built.sessionId };
 }
 
 export async function buildTriage(pr: PullRequest): Promise<BuiltJob<TriageData>> {
@@ -137,7 +138,7 @@ export async function updateWalkthrough(pr: PullRequest, previous: PreviousBuild
   const change = { fromSha: previous.builtFor, toSha: pr.headSha, at: new Date().toISOString() };
   const merged = mergeUpdate({ previous: previous.data, plan, update: asked?.data, newFiles: files, removed, change, idPrefix: updateIdPrefix(pr) });
   const walkthrough = await checkWalkthroughProofs(merged.walkthrough, lineCounterFor(checkout.worktree, checkout.mergeBase));
-  return { data: { ...merged, walkthrough, plainNotes: previous.data.plainNotes }, sessionId: asked?.sessionId ?? previous.sessionId ?? randomUUID() };
+  return { data: { ...merged, walkthrough, plainNotes: previous.data.plainNotes, plainQuestions: previous.data.plainQuestions }, sessionId: asked?.sessionId ?? previous.sessionId ?? randomUUID() };
 }
 
 function threadsNeedingTriage(pr: PullRequest, previousFingerprint: string): ReviewThread[] {
