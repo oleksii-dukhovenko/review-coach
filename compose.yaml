@@ -6,6 +6,8 @@ services:
     environment:
       # Inside the container it is always 4477; REVIEW_COACH_PORT only picks the port on this computer.
       REVIEW_COACH_PORT: "4477"
+      # The Neovim button opens through review-coach-open on this computer; install.sh sets it up.
+      REVIEW_COACH_NEOVIM: link
     ports:
       # Only this computer can open it.
       - "127.0.0.1:${REVIEW_COACH_PORT:-4477}:4477"

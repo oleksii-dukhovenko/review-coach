@@ -31,6 +31,8 @@ That's it. It opens http://127.0.0.1:4477 when it's ready. **Run the same comman
 - **All files & changes** on one page, with a checkbox per file.
 - **Ctrl+click any name** to see where that exact thing is used, through real language servers for Go, Dart, and TypeScript.
 - **New commits?** "Update" redoes only what changed and keeps your progress.
+- **Open in Neovim**: one click opens the PR's diff in your Neovim (diffview.nvim if you have it). On Linux the install command sets this up.
+- **You decide what uses Claude**: "Prepare automatically" in the inbox is Off by default, so nothing is prepared until you click Prepare.
 
 | Zoom into the big picture | Steps with side-by-side code |
 | --- | --- |

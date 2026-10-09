@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# Opens a PR's diff in Neovim. The browser hands it links like:
+#   review-coach://open?repo=owner/name&pr=42&base=main&file=src/app.ts
+# install.sh registers it as the handler for review-coach:// links.
+set -euo pipefail
+
+CLONES="${XDG_CACHE_HOME:-$HOME/.cache}/review-coach-links"
+TERMINALS=(ptyxis gnome-terminal kitty alacritty wezterm foot ghostty konsole xfce4-terminal x-terminal-emulator)
+
+IN_TERMINAL=false
+
+# In a terminal, waits so the message can be read before the window closes.
+complain() {
+  command -v notify-send >/dev/null 2>&1 && notify-send "Review Coach" "$1"
+  echo "$1" >&2
+  $IN_TERMINAL && read -rp "Press Enter to close." _
+  exit 1
+}
+
+url_decode() {
+  local text="${1//+/ }"
+  printf '%b' "${text//%/\\x}"
+}
+
+# Reads one value from the link's query string.
+link_value() {
+  local link="$1" key="$2" pair
+  local query="${link#*\?}"
+  IFS='&' read -ra pairs <<< "$query"
+  for pair in "${pairs[@]}"; do
+    [ "${pair%%=*}" = "$key" ] && url_decode "${pair#*=}" && return
+  done
+  return 0
+}
+
+check_link() {
+  [[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || complain "Not a repo name: $REPO"
+  [[ "$PR" =~ ^[0-9]+$ ]] || complain "Not a PR number: $PR"
+  git check-ref-format --branch "$BASE" >/dev/null 2>&1 || complain "Not a branch name: $BASE"
+}
+
+# A clone of our own, so nobody has to say where theirs is.
+ensure_clone() {
+  [ -d "$CLONE/.git" ] && return
+  echo "First time for $REPO: cloning it (only the history, files come as needed)."
+  mkdir -p "$(dirname "$CLONE")"
+  gh repo clone "$REPO" "$CLONE" -- --filter=blob:none --quiet
+}
+
+fetch_pr() {
+  echo "Fetching PR #$PR and $BASE..."
+  git -C "$CLONE" fetch --quiet origin "+refs/pull/$PR/head:refs/review/$PR" "+refs/heads/$BASE:refs/review/base-$PR"
+  git -C "$CLONE" checkout --quiet --force --detach "refs/review/$PR"
+}
+
+has_diffview() {
+  nvim --headless -c 'lua io.stdout:write(pcall(require, "diffview") and "yes" or "no")' -c 'qa!' 2>/dev/null | grep -q yes
+}
+
+# Inside a Vim single-quoted string only the quote itself needs doubling.
+vim_string() {
+  printf "'%s'" "${1//\'/\'\'}"
+}
+
+open_neovim() {
+  local merge_base
+  merge_base="$(git -C "$CLONE" merge-base "refs/review/base-$PR" "refs/review/$PR")"
+  cd "$CLONE"
+  if ! has_diffview; then
+    echo "diffview.nvim not found; using Neovim's own diff. :qa moves to the next file."
+    exec git -c difftool.prompt=false difftool --tool=nvimdiff "$merge_base" -- ${FILE:+"$FILE"}
+  fi
+  [ -z "$FILE" ] && exec nvim -c "DiffviewOpen $merge_base"
+  exec nvim -c "execute 'DiffviewOpen $merge_base -- ' . fnameescape($(vim_string "$FILE"))"
+}
+
+pick_terminal() {
+  [ -n "${REVIEW_COACH_TERMINAL:-}" ] && echo "$REVIEW_COACH_TERMINAL" && return
+  local terminal
+  for terminal in "${TERMINALS[@]}"; do
+    command -v "$terminal" >/dev/null 2>&1 && echo "$terminal" && return
+  done
+  complain "No terminal found. Set REVIEW_COACH_TERMINAL, e.g. kitty."
+}
+
+# Each terminal takes the command to run a little differently.
+terminal_args() {
+  case "$1" in
+    ptyxis) echo "--new-window --" ;;
+    gnome-terminal) echo "--" ;;
+    wezterm) echo "start --" ;;
+    kitty|foot) echo "" ;;
+    xfce4-terminal) echo "-x" ;;
+    *) echo "-e" ;;
+  esac
+}
+
+# Runs this script again inside a new terminal, so the fetch and Neovim are visible.
+open_terminal() {
+  local terminal
+  terminal="$(pick_terminal)"
+  # shellcheck disable=SC2046
+  setsid "$terminal" $(terminal_args "$terminal") "$(realpath "$0")" --in-terminal "$1" >/dev/null 2>&1 &
+}
+
+# Desktop launchers can start with a short PATH; add the usual install folders.
+find_tools() {
+  export PATH="$PATH:$HOME/.local/bin:/usr/local/bin:/snap/bin"
+  command -v nvim >/dev/null 2>&1 || complain "Neovim (nvim) is not installed."
+  command -v gh >/dev/null 2>&1 || complain "The GitHub CLI (gh) is not installed."
+}
+
+run_in_terminal() {
+  local link="$1"
+  IN_TERMINAL=true
+  trap 'complain "Something went wrong above."' ERR
+  find_tools
+  REPO="$(link_value "$link" repo)"
+  PR="$(link_value "$link" pr)"
+  BASE="$(link_value "$link" base)"
+  FILE="$(link_value "$link" file)"
+  CLONE="$CLONES/$REPO"
+  check_link
+  ensure_clone
+  fetch_pr
+  open_neovim
+}
+
+if [ "${1:-}" = "--in-terminal" ]; then
+  run_in_terminal "$2"
+else
+  open_terminal "${1:?usage: review-coach-open review-coach://open?...}"
+fi

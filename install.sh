@@ -62,6 +62,18 @@ write_settings() {
   [ -n "$(env_value CLAUDE_CODE_OAUTH_TOKEN)" ] || fail "No Claude token. Run this again and paste it."
 }
 
+# Lets the app's Neovim button open a terminal on this computer (Linux only).
+install_neovim_links() {
+  command -v xdg-mime >/dev/null 2>&1 || return 0
+  local bin="$HOME/.local/bin/review-coach-open" apps="$HOME/.local/share/applications"
+  mkdir -p "$(dirname "$bin")" "$apps" "${XDG_CONFIG_HOME:-$HOME/.config}"
+  install -m 755 "$INSTALL_DIR/host/review-coach-open" "$bin"
+  sed "s|REVIEW_COACH_OPEN_PATH|$bin|" "$INSTALL_DIR/host/review-coach-open.desktop" > "$apps/review-coach-open.desktop"
+  xdg-mime default review-coach-open.desktop x-scheme-handler/review-coach
+  command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$apps" >/dev/null 2>&1 || true
+  command -v nvim >/dev/null 2>&1 || say "Tip: install Neovim to use the app's Neovim button."
+}
+
 start_app() {
   say "Building and starting (the first time takes a few minutes)"
   (cd "$INSTALL_DIR" && docker compose up -d --build --quiet-pull)
@@ -90,5 +102,6 @@ check_tools
 log_in_to_github
 get_code
 write_settings
+install_neovim_links
 start_app
 wait_and_open

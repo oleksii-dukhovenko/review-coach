@@ -46,10 +46,25 @@ function isInsideCheckout(worktree: string, file: string | undefined): boolean {
   return fullPath.startsWith(`${path.resolve(worktree)}${path.sep}`);
 }
 
-/** Opens the PR's diff in Neovim, in a new terminal window on this machine. */
-export async function openInEditor(pr: PullRequest, file?: string): Promise<void> {
+/** A link the computer's own review-coach-open handler turns into a Neovim window. */
+export function neovimLink(pr: PullRequest, file?: string): string {
+  const query = new URLSearchParams({ repo: `${pr.owner}/${pr.repo}`, pr: String(pr.number), base: pr.baseRef });
+  if (file) query.set("file", file);
+  return `review-coach://open?${query}`;
+}
+
+export type OpenResult = { opened: true } | { link: string };
+
+/** Opens the PR's diff in Neovim: a terminal here, or a link for the browser when running in Docker. */
+export async function openInEditor(pr: PullRequest, file?: string): Promise<OpenResult> {
   const terminal = pickTerminal();
-  if (!terminal || !TERMINALS[terminal]) throw new Error("No terminal found. Opening Neovim only works when the app runs on your own machine, not in Docker.");
+  const canOpenHere = config.neovimMode !== "link" && terminal !== undefined && TERMINALS[terminal] !== undefined;
+  if (!canOpenHere) return { link: neovimLink(pr, file) };
+  await openTerminalHere(terminal!, pr, file);
+  return { opened: true };
+}
+
+async function openTerminalHere(terminal: string, pr: PullRequest, file?: string): Promise<void> {
   const { worktree, mergeBase } = await ensureCheckout(pr);
   if (!isInsideCheckout(worktree, file)) throw new Error("That file is outside this PR's checkout");
   // - A login shell finds nvim wherever it is installed.

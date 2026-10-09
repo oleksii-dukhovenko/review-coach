@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Review Coach: open in Neovim
+Comment=Opens review-coach:// links from the Review Coach app
+Exec=REVIEW_COACH_OPEN_PATH %u
+MimeType=x-scheme-handler/review-coach;
+NoDisplay=true
+Terminal=false

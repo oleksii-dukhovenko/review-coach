@@ -193,8 +193,7 @@ export function buildRoutes(): Hono {
   });
 
   api.post(`${prPath}/open-in-editor`, async (context) => {
-    await openInEditor(requirePr(context), context.req.query("file") || undefined);
-    return context.json({ ok: true });
+    return context.json(await openInEditor(requirePr(context), context.req.query("file") || undefined));
   });
 
   api.post(`${prPath}/picture-nodes`, async (context) => context.json(await pictureNodes(requirePr(context).key)));

@@ -22,6 +22,8 @@ export const config = {
   model: process.env.REVIEW_COACH_MODEL,
   // - Terminal for "Open in Neovim", e.g. ptyxis or kitty; unset picks one.
   terminal: process.env.REVIEW_COACH_TERMINAL,
+  // - "link" hands the browser a review-coach:// link instead; Docker sets it.
+  neovimMode: process.env.REVIEW_COACH_NEOVIM,
   dataDir,
   dbFile: path.join(dataDir, "review-coach.db"),
   mirrorsDir: path.join(dataDir, "mirrors"),
