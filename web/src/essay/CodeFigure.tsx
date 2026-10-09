@@ -6,6 +6,7 @@ import { commentFlags } from "../components/commentLines.ts";
 import { isPeekClick, lineRefOf } from "../components/lineClicks.ts";
 import { languageForFile, renderCodeLine } from "../components/highlight.ts";
 import { Icon } from "../components/Icon.tsx";
+import { OpenInNeovim } from "../components/OpenInNeovim.tsx";
 import { PeekReferences } from "../components/PeekReferences.tsx";
 import { wordAtClick } from "../components/wordAtPoint.ts";
 import type { PlacedComment } from "../placeComments.ts";
@@ -250,7 +251,10 @@ export function CodeFigure(props: FigureProps) {
       </div>
       <figcaption>
         <span>{figure.number ? `Fig. ${figure.number} — ` : ""}{figure.file.split("/").at(-1)}, {captionRange(figure)}{hasFolds ? " (some lines folded)" : ""} · old on the left, new on the right · click a line to comment or ask</span>
-        <button className="text-link" onClick={() => setIsFull(!isFull)}>{isFull ? "Fold again" : "Open full diff"}</button>
+        <span className="fig-links">
+          <OpenInNeovim route={props.session.route} file={figure.file} className="text-link" label="Neovim" />
+          <button className="text-link" onClick={() => setIsFull(!isFull)}>{isFull ? "Fold again" : "Open full diff"}</button>
+        </span>
       </figcaption>
     </figure>
   );

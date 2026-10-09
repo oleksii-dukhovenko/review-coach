@@ -8,6 +8,7 @@ import { getJob, getPr, getReviewState, getSetting, listAsks, listInboxPrs, save
 import { isAutoUpdateOn, refreshAndRecord, setAutoUpdate } from "./inbox.ts";
 import { combinedStatus, isOutOfDate, mainJobKinds, needsPreparing, type MainJobKind } from "./jobKinds.ts";
 import { sectionOf } from "./myPrSections.ts";
+import { openInEditor } from "./openInEditor.ts";
 import { pictureNodes } from "./pictureMap.ts";
 import { rewriteInPlainWords } from "./plainWords.ts";
 import { replyToThread, submitReview, type ReviewSubmission } from "./posting.ts";
@@ -180,6 +181,11 @@ export function buildRoutes(): Hono {
 
   api.post(`${prPath}/plain-words`, async (context) => {
     await rewriteInPlainWords(requirePr(context).key);
+    return context.json({ ok: true });
+  });
+
+  api.post(`${prPath}/open-in-editor`, async (context) => {
+    await openInEditor(requirePr(context), context.req.query("file") || undefined);
     return context.json({ ok: true });
   });
 

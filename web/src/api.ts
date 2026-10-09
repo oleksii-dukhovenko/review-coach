@@ -104,6 +104,8 @@ export const api = {
   snippet: (route: PrRoute, file: string, line: number) =>
     requestJson<Snippet>("GET", `${prUrl(route)}/snippet?${new URLSearchParams({ file, line: String(line) })}`),
   rewriteInPlainWords: (route: PrRoute) => requestJson<{ ok: boolean }>("POST", `${prUrl(route)}/plain-words`),
+  openInEditor: (route: PrRoute, file?: string) =>
+    requestJson<{ ok: boolean }>("POST", `${prUrl(route)}/open-in-editor${file ? `?${new URLSearchParams({ file })}` : ""}`),
   pictureNodes: (route: PrRoute) => requestJson<PictureNode[]>("POST", `${prUrl(route)}/picture-nodes`),
 };
 

@@ -20,6 +20,8 @@ export const config = {
   onlyRepos: (process.env.REVIEW_COACH_REPOS ?? "").split(",").map((repo) => repo.trim()).filter(Boolean),
   // - Unset uses the Claude Code default model.
   model: process.env.REVIEW_COACH_MODEL,
+  // - Terminal for "Open in Neovim", e.g. ptyxis or kitty; unset picks one.
+  terminal: process.env.REVIEW_COACH_TERMINAL,
   dataDir,
   dbFile: path.join(dataDir, "review-coach.db"),
   mirrorsDir: path.join(dataDir, "mirrors"),

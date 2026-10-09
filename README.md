@@ -109,6 +109,7 @@ npm install && npm run build && npm start     # http://127.0.0.1:4477
 - `REVIEW_COACH_REPOS`: only watch these repos, comma-separated, e.g. `Round2POS/hyperion,Round2POS/crm`. Empty watches all.
 - `REVIEW_COACH_DATA_DIR`: where checkouts and the database live. Default `~/.cache/review-coach`.
 - `REVIEW_COACH_MODEL`: Claude model for walkthroughs and questions. Default is your Claude Code default.
+- `REVIEW_COACH_TERMINAL`: terminal for the Neovim button, e.g. `ptyxis`, `kitty`, `alacritty`. Default is the first one installed. The button needs Neovim with diffview.nvim, and only works without Docker.
 - `FLUTTER_ROOT`, `PUB_CACHE`: where Dart packages live. Defaults are `~/flutter` and `~/.pub-cache`.
 - Language servers need `gopls` and `dart` on the service's `PATH`. The TypeScript server ships with this project.
 - Dart checkouts get a generated `.dart_tool/package_config.json` from the lockfile and pub cache, so no network `pub get` is needed.

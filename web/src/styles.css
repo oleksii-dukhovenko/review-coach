@@ -672,6 +672,8 @@ div.step-code { padding: 10px; }
 }
 .fig-fold:hover { background: var(--color-accent-100); }
 .code-figure figcaption { display: flex; justify-content: space-between; gap: 16px; font-size: 12px; margin-top: 6px; color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+.fig-links { display: inline-flex; gap: 14px; align-items: baseline; flex: none; }
+.fig-links .icon { display: none; }
 .fig-below { padding: 6px 10px; font-family: var(--font-body); white-space: normal; }
 .peek-key-held .fig-half .code { cursor: pointer; }
 
