@@ -33,20 +33,18 @@ type BlockProps = { session: ReviewSession; file: string; question: QuestionData
 function AnsweringBox({ typed, isSending, onType, onSend, onCancel }: {
   typed: string; isSending: boolean; onType: (typed: string) => void; onSend: () => void; onCancel: () => void;
 }) {
-  const sendOnShortcut = (event: React.KeyboardEvent) => {
-    if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
+  const handleKey = (event: React.KeyboardEvent) => {
+    if (event.key === "Escape") onCancel();
+    const isSend = event.key === "Enter" && !event.shiftKey;
+    if (!isSend) return;
     event.preventDefault();
-    onSend();
+    if (typed.trim() && !isSending) onSend();
   };
   return (
     <div className="q-answering">
-      <textarea className="input q-input" autoFocus value={typed} onChange={(event) => onType(event.target.value)} onKeyDown={sendOnShortcut}
-        placeholder="What do you think? A sentence or two is plenty." />
-      <div className="q-actions">
-        <button className="btn btn-magenta" disabled={!typed.trim() || isSending} onClick={onSend}>{isSending ? "Sending…" : "Send to coach"}</button>
-        <button className="btn btn-ghost btn-quiet" onClick={onCancel}>Cancel</button>
-        <span className="q-hint">⌘ Enter to send</span>
-      </div>
+      <textarea className="q-input" autoFocus rows={2} value={typed} disabled={isSending} onChange={(event) => onType(event.target.value)} onKeyDown={handleKey}
+        placeholder="Your answer, in a sentence or two." />
+      <span className="q-hint">{isSending ? "Asking the coach…" : "Enter to send · Shift+Enter for a new line · Esc to cancel"}</span>
     </div>
   );
 }
@@ -82,59 +80,101 @@ function ReviewChoice({ answer, onAdd, onFine, onUndo }: { answer: QuestionAnswe
   }
   if (answer.decision === "fine") return <p className="q-status">Marked fine · <button className="text-link" onClick={onUndo}>undo</button></p>;
   return (
-    <div className="q-actions">
-      <button className="btn btn-primary" onClick={onAdd}><Icon name="message" /> Add as review comment</button>
-      <button className="btn btn-ghost" onClick={onFine}>Looks fine</button>
+    <div className="q-links">
+      <button className="q-link is-main" onClick={onAdd}>Add as review comment</button>
+      <button className="q-link" onClick={onFine}>Looks fine</button>
     </div>
   );
 }
 
-/** "Q." in the text: answer it, see the answer, get it explained, or skip for now. */
-export function QuestionBlock({ session, file, question, onShowLines }: BlockProps) {
-  const answer = session.state.answers[question.id] ?? EMPTY_ANSWER;
-  const save = (changes: Partial<QuestionAnswer>) => session.saveAnswer(question.id, { ...answer, ...changes });
-  const [stage, setStage] = useState<Stage>(answer.feedback ? "answered" : "idle");
+/** One line saying where a settled question ended up. */
+function summaryOf(answer: QuestionAnswer): string {
+  if (answer.decision === "problem") return "In your review";
+  if (answer.decision === "fine") return "Looks fine";
+  if (answer.feedback) return ["Answered", splitVerdict(answer.feedback).verdict].filter(Boolean).join(" · ");
+  if (answer.revealed) return "Answer shown";
+  if (answer.explanation !== undefined) return "Explained";
+  return "Skipped";
+}
+
+function FoldedQuestion({ question, answer, onOpen }: { question: QuestionData; answer: QuestionAnswer; onOpen: () => void }) {
+  return (
+    <button className="q-folded" onClick={onOpen} title="Open the question">
+      <Icon name="check" size={14} /> <span className="q-folded-text">{question.question}</span>
+      <span className="q-folded-status">{summaryOf(answer)}</span>
+    </button>
+  );
+}
+
+type QuestionActions = { onAnswer: () => void; onShow: () => void; onExplain: () => void; onSkip: () => void; isExplaining: boolean };
+
+function QuestionLinks({ actions }: { actions: QuestionActions }) {
+  return (
+    <div className="q-links">
+      <button className="q-link is-main" onClick={actions.onAnswer}>Answer</button>
+      <button className="q-link" onClick={actions.onShow}>Show me</button>
+      <button className="q-link" disabled={actions.isExplaining} onClick={actions.onExplain}>{actions.isExplaining ? "Explaining…" : "Explain"}</button>
+      <button className="q-link" onClick={actions.onSkip}>Skip</button>
+    </div>
+  );
+}
+
+function useAnswerSending(session: ReviewSession, file: string, question: QuestionData, answer: QuestionAnswer, onDone: () => void) {
   const [isSending, setIsSending] = useState(false);
-  const subject = { route: session.route, file, span: questionSpan(question), topic: `the coaching question "${question.question}"` };
-  const explainer = useExplainChat(subject, chatOf(answer), (chat) => save({ explanation: chat.explanation, followUps: chat.followUps }));
   const send = async () => {
     setIsSending(true);
     try {
       const onReply = (feedback: string) => session.saveAnswer(question.id, { ...answer, feedback });
       await askQuestion(session.route, { file, ...questionSpan(question), question: checkAnswerPrompt(question, answer.typed), keepInHistory: false }, onReply);
-      setStage("answered");
+      onDone();
     } finally {
       setIsSending(false);
     }
   };
-  const addToReview = () => save({ decision: "problem", draft: answer.draft || question.suggestedComment });
+  return { isSending, send };
+}
+
+/** A question in the code: answer it, see the answer, get it explained, or skip; settled ones fold to one line. */
+export function QuestionBlock({ session, file, question, onShowLines }: BlockProps) {
+  const answer = session.state.answers[question.id] ?? EMPTY_ANSWER;
+  const save = (changes: Partial<QuestionAnswer>) => session.saveAnswer(question.id, { ...answer, ...changes });
+  const [stage, setStage] = useState<Stage>(answer.feedback ? "answered" : "idle");
+  const [isOpen, setIsOpen] = useState(!isQuestionSettled(answer));
+  const subject = { route: session.route, file, span: questionSpan(question), topic: `the coaching question "${question.question}"` };
+  const explainer = useExplainChat(subject, chatOf(answer), (chat) => save({ explanation: chat.explanation, followUps: chat.followUps }));
+  const sending = useAnswerSending(session, file, question, answer, () => setStage("answered"));
+  // - Skipping or deciding folds the question to one line.
+  const settle = (changes: Partial<QuestionAnswer>) => {
+    save(changes);
+    setIsOpen(false);
+  };
+  if (!isOpen && stage !== "answering") return <FoldedQuestion question={question} answer={answer} onOpen={() => setIsOpen(true)} />;
+  const actions: QuestionActions = {
+    onAnswer: () => setStage("answering"),
+    onShow: () => save({ revealed: true }),
+    onExplain: () => explainer.start(explainPrompt(subject.topic, `${question.because}\n\nExample: ${question.example}`)),
+    onSkip: () => settle({ skipped: true }),
+    isExplaining: explainer.isWriting,
+  };
   const hasDecision = answer.feedback !== "" || answer.revealed;
+  const isSettled = isQuestionSettled(answer);
   return (
     <div className="q-block" id={`q-${question.id}`}>
-      <span className="q-mark">Q.</span>
-      <div className="q-body">
-        <p className="q-text">{question.question}</p>
-        {onShowLines ? <button className="line-ref" onClick={onShowLines}>→ {rangeLabel(rangeOf(question))}</button> : null}
-        {stage === "idle" && !answer.skipped ? (
-          <div className="q-actions">
-            <button className="btn btn-magenta" onClick={() => setStage("answering")}>I'll answer</button>
-            <button className="btn btn-secondary" onClick={() => save({ revealed: true })}>Show me</button>
-            <button className="btn btn-secondary" disabled={explainer.isWriting} onClick={() => explainer.start(explainPrompt(subject.topic, `${question.because}\n\nExample: ${question.example}`))}>
-              {explainer.isWriting ? "Explaining…" : "Explain"}
-            </button>
-            <button className="btn btn-ghost btn-quiet" onClick={() => save({ skipped: true })}>Skip for now</button>
-          </div>
-        ) : null}
-        {answer.skipped && stage === "idle" && !hasDecision ? <p className="q-status">Skipped · <button className="text-link" onClick={() => save({ skipped: false })}>answer it</button></p> : null}
-        {stage === "answering" ? <AnsweringBox typed={answer.typed} isSending={isSending} onType={(typed) => save({ typed })} onSend={() => void send()} onCancel={() => setStage("idle")} /> : null}
-        {stage === "answered" && answer.feedback ? <CoachReply answer={answer} /> : null}
-        {answer.revealed ? <ShownAnswer question={question} /> : null}
-        {answer.explanation !== undefined || explainer.isWriting || explainer.error ? (
-          <ExplanationBox chat={chatOf(answer) ?? { explanation: "" }} isWriting={explainer.isWriting} error={explainer.error} onFollowUp={explainer.followUp} />
-        ) : null}
-        {hasDecision ? <ReviewChoice answer={answer} onAdd={addToReview} onFine={() => save({ decision: "fine" })} onUndo={() => save({ decision: null })} /> : null}
-        {stage === "answered" ? <div className="q-actions"><button className="btn btn-ghost btn-quiet" onClick={() => setStage("answering")}>Answer again</button></div> : null}
+      <div className="q-label">
+        Question · {onShowLines ? <button className="text-link" onClick={onShowLines}>{rangeLabel(rangeOf(question))}</button> : rangeLabel(rangeOf(question))}
+        {isSettled ? <button className="q-fold" onClick={() => setIsOpen(false)}>fold</button> : null}
       </div>
+      <p className="q-text">{question.question}</p>
+      {stage === "idle" && !answer.skipped ? <QuestionLinks actions={actions} /> : null}
+      {answer.skipped && stage === "idle" && !hasDecision ? <p className="q-status">Skipped · <button className="text-link" onClick={() => save({ skipped: false })}>answer it</button></p> : null}
+      {stage === "answering" ? <AnsweringBox typed={answer.typed} isSending={sending.isSending} onType={(typed) => save({ typed })} onSend={() => void sending.send()} onCancel={() => setStage("idle")} /> : null}
+      {stage === "answered" && answer.feedback ? <CoachReply answer={answer} /> : null}
+      {answer.revealed ? <ShownAnswer question={question} /> : null}
+      {answer.explanation !== undefined || explainer.isWriting || explainer.error ? (
+        <ExplanationBox chat={chatOf(answer) ?? { explanation: "" }} isWriting={explainer.isWriting} error={explainer.error} onFollowUp={explainer.followUp} />
+      ) : null}
+      {hasDecision ? <ReviewChoice answer={answer} onAdd={() => settle({ decision: "problem", draft: answer.draft || question.suggestedComment })} onFine={() => settle({ decision: "fine" })} onUndo={() => save({ decision: null })} /> : null}
+      {stage === "answered" ? <div className="q-links"><button className="q-link" onClick={() => setStage("answering")}>Answer again</button></div> : null}
     </div>
   );
 }
