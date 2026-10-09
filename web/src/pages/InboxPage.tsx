@@ -128,9 +128,9 @@ function PreparingNote({ rows }: { rows: InboxRow[] }) {
 }
 
 const AUTO_PREPARE_OPTIONS: { mode: AutoPrepare; label: string; hint: string }[] = [
-  { mode: "off", label: "Off", hint: "Nothing uses Claude until you click Prepare." },
-  { mode: "reviews", label: "Reviews for me", hint: "PRs you are asked to review get prepared on their own." },
-  { mode: "all", label: "Everything that needs me", hint: "Reviews for you, plus your drafts and PRs with comments waiting on you." },
+  { mode: "off", label: "Nothing", hint: "Claude runs only when you click Prepare." },
+  { mode: "reviews", label: "PRs I review", hint: "Other people's PRs you are asked to review." },
+  { mode: "all", label: "PRs I review + my drafts & comments", hint: "Also your drafts, and your PRs with comments you need to answer." },
 ];
 
 /** How much gets prepared without a click, since each walkthrough uses Claude tokens. */
@@ -138,8 +138,8 @@ function AutoPrepareSetting({ mode, onChange }: { mode: AutoPrepare; onChange: (
   const chosen = AUTO_PREPARE_OPTIONS.find((option) => option.mode === mode);
   return (
     <div className="auto-prepare">
-      <span className="small-caps">Prepare automatically</span>
-      <div className="seg" role="radiogroup" aria-label="Prepare automatically">
+      <span className="small-caps">Prepare on its own</span>
+      <div className="seg" role="radiogroup" aria-label="Prepare on its own">
         {AUTO_PREPARE_OPTIONS.map((option) => (
           <label key={option.mode} className="seg-opt">
             <input type="radio" name="auto-prepare" checked={mode === option.mode} onChange={() => onChange(option.mode)} />
