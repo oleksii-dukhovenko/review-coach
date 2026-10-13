@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import type { WalkthroughData } from "../api.ts";
 import { Markdown } from "../components/basics.tsx";
+import { BrandMark } from "../components/BrandMark.tsx";
 import { Icon } from "../components/Icon.tsx";
 import { ThemePicker } from "../components/ThemePicker.tsx";
 import { useActiveAnchor } from "../activeAnchor.ts";
@@ -83,7 +84,7 @@ export function Rail({ session, steps, place, goTo, currentFile }: { session: Re
   const { pr } = session.page;
   return (
     <nav className="essay-rail" aria-label="Steps">
-      <a href="#/" className="rail-brand">Review Coach</a>
+      <a href="#/" className="rail-brand"><BrandMark size={20} /> Review Coach</a>
       <button className="rail-pr" onClick={() => goTo({ kind: "lede" })} title="Back to the overview">
         <span className="small muted">{pr.repo} · #{pr.number}</span>
         <span className="rail-pr-title">{pr.title}</span>

@@ -1,7 +1,7 @@
 // - Light colors; the page passes the current theme's own when it draws.
 const LIGHT_CLASSES = [
-  "classDef added fill:#cbeeff,stroke:#0088b0,color:#0a303e,stroke-width:1.5px",
-  "classDef changed fill:#ffdee6,stroke:#d6006c,color:#4b1528,stroke-width:1.5px",
+  "classDef added fill:#d5f3da,stroke:#298646,color:#053817,stroke-width:1.5px",
+  "classDef changed fill:#fde6c6,stroke:#98660a,color:#402801,stroke-width:1.5px",
 ];
 
 function isFlowchart(source: string): boolean {

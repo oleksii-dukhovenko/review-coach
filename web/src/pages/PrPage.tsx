@@ -10,6 +10,7 @@ import { Working } from "../components/Working.tsx";
 import { EssayReview } from "../essay/EssayReview.tsx";
 import type { EssayView } from "../essay/session.ts";
 import { MyPrReview } from "./MyPrReview.tsx";
+import { PrHeader } from "./PrHeader.tsx";
 
 const POLL_WHILE_BUILDING_MS = 5_000;
 
@@ -88,39 +89,13 @@ function isAnyJobReady(page: PrPageData): boolean {
 function PrActions({ page, onRebuild }: { page: PrPageData; onRebuild: () => void }) {
   const { pr } = page;
   return (
-    <div className="pr-actions">
-      <a href="#/" className="btn btn-ghost btn-small btn-quiet"><Icon name="arrowLeft" size={15} /> Inbox</a>
+    <>
       <AutoUpdateToggle route={pr} isOn={page.autoUpdate} />
       {isAnyJobReady(page) ? <button className="btn btn-ghost btn-small btn-quiet" onClick={onRebuild} title="Write everything again from scratch">Start over</button> : null}
-      <OpenInNeovim route={pr} />
-      <ThemePicker />
+      <OpenInNeovim route={pr} className="btn btn-secondary btn-small" />
       <a className="btn btn-secondary btn-small" href={pr.url} target="_blank" rel="noreferrer"><Icon name="github" size={15} /> GitHub</a>
-    </div>
-  );
-}
-
-function PrHeader({ page, onRebuild }: { page: PrPageData; onRebuild: () => void }) {
-  const { pr } = page;
-  return (
-    <div className="pr-header">
-      <a href="#/" className="back-link"><Icon name="arrowLeft" size={14} /> Inbox</a>
-      <h1>{pr.title}</h1>
-      <div className="pr-header-row">
-        <div className="inbox-meta small muted" style={{ marginTop: 0 }}>
-          <span className="repo-pill">{pr.repo}</span>
-          <span className="mono">#{pr.number}</span>
-          {pr.isDraft ? <span className="chip">Draft</span> : null}
-          <span>{pr.author}</span>
-          <span>into <span className="mono">{pr.baseRef}</span></span>
-          <span><span className="added-count">+{pr.additions}</span> <span className="deleted-count">-{pr.deletions}</span></span>
-        </div>
-        <div className="pr-actions">
-          <AutoUpdateToggle route={pr} isOn={page.autoUpdate} />
-          {isAnyJobReady(page) ? <button className="ghost" onClick={onRebuild} title="Write everything again from scratch">Start over</button> : null}
-          <a className="button-link" href={pr.url} target="_blank" rel="noreferrer"><Icon name="github" size={14} /> GitHub</a>
-        </div>
-      </div>
-    </div>
+      <ThemePicker />
+    </>
   );
 }
 
@@ -157,16 +132,13 @@ export function PrPage({ route, view, goTo }: { route: PrRoute; view: EssayView;
   const walkthrough = page.jobKinds.includes("walkthrough") ? buildOf("walkthrough") : null;
   if (walkthrough) {
     return (
-      <>
-        <div className="pr-banners"><ErrorBanner message={error} />{banners}</div>
-        <EssayReview key={walkthrough.builtAt} route={route} page={page} view={view} goTo={goTo}
-          actions={<PrActions page={page} onRebuild={rebuild} />} extra={triage} />
-      </>
+      <EssayReview key={walkthrough.builtAt} route={route} page={page} view={view} goTo={goTo}
+        actions={<PrActions page={page} onRebuild={rebuild} />} banners={<><ErrorBanner message={error} />{banners}</>} extra={triage} />
     );
   }
   return (
     <div className="page-pad">
-      <PrHeader page={page} onRebuild={rebuild} />
+      <PrHeader pr={page.pr} actions={<PrActions page={page} onRebuild={rebuild} />} />
       <ErrorBanner message={error} />
       {banners}
       {triage}

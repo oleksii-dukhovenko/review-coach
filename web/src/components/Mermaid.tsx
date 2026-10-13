@@ -14,13 +14,13 @@ function themeVariables() {
   return {
     primaryColor: token("--color-surface"), primaryBorderColor: token("--color-neutral-400"), primaryTextColor: token("--color-text"),
     lineColor: token("--color-neutral-500"), edgeLabelBackground: token("--color-bg"),
-    fontFamily: "\"Source Serif 4\", Georgia, serif", fontSize: "14px",
+    fontFamily: "Geist, system-ui, sans-serif", fontSize: "14px",
   };
 }
 
 function themeClasses(): string[] {
-  const added = `fill:${token("--color-accent-200")},stroke:${token("--color-accent")},color:${token("--color-accent-900")}`;
-  const changed = `fill:${token("--color-accent-2-200")},stroke:${token("--color-accent-2")},color:${token("--color-accent-2-900")}`;
+  const added = `fill:${token("--color-green-200")},stroke:${token("--color-green-600")},color:${token("--color-green-900")}`;
+  const changed = `fill:${token("--color-amber-200")},stroke:${token("--color-amber-600")},color:${token("--color-amber-900")}`;
   return [`classDef added ${added},stroke-width:1.5px`, `classDef changed ${changed},stroke-width:1.5px`];
 }
 

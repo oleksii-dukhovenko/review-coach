@@ -57,7 +57,7 @@ function shrinkToBox(panel: HTMLElement, box: DOMRect): string {
   return `translate(${box.left - final.left}px, ${box.top - final.top}px) scale(${scaleX}, ${scaleY})`;
 }
 
-const BOX_TINT: Record<NodeChange, string> = { added: "--color-accent-200", changed: "--color-accent-2-200", existing: "--color-surface" };
+const BOX_TINT: Record<NodeChange, string> = { added: "--color-green-200", changed: "--color-amber-200", existing: "--color-surface" };
 
 function tokenColor(token: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(token).trim();
@@ -66,7 +66,7 @@ function tokenColor(token: string): string {
 function growPanel(panel: HTMLElement, box: DOMRect, isOpening: boolean): Animation {
   const tint = tokenColor(BOX_TINT[panel.dataset.change as NodeChange] ?? BOX_TINT.existing);
   const onBox = { transform: shrinkToBox(panel, box), borderRadius: "40px", backgroundColor: tint };
-  const full = { transform: "none", borderRadius: "2px", backgroundColor: tokenColor("--color-bg") };
+  const full = { transform: "none", borderRadius: "12px", backgroundColor: tokenColor("--color-bg") };
   return panel.animate(isOpening ? [onBox, full] : [full, onBox], { duration: motionMs(), easing: EASE, fill: "forwards" });
 }
 
