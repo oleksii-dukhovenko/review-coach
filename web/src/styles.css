@@ -272,7 +272,7 @@ textarea { min-height: 72px; resize: vertical; }
 }
 .update-pill.is-working { background: var(--working-soft); color: var(--working); }
 .update-pill.is-failed { background: var(--problem-soft); color: var(--problem); }
-.row-menu.update-menu > summary { width: auto; height: auto; color: var(--color-accent-700); }
+.row-menu.update-menu > summary { display: inline-flex; width: auto; height: auto; border-radius: 999px; color: var(--color-accent-700); }
 .row-menu.update-menu > summary.is-failed { color: var(--problem); }
 .row-menu.update-menu > summary:hover, .row-menu.update-menu[open] > summary { background: var(--color-accent-200); }
 .update-panel { width: min(360px, calc(100vw - 32px)); padding: 14px; gap: 10px; align-items: flex-start; }
