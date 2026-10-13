@@ -20,6 +20,8 @@ export function runCommand(command: string, args: string[], options: CommandOpti
         exitCode: exitCode ?? -1,
       }),
     );
+    // - Ignores EPIPE when the child exits before reading stdin.
+    child.stdin.on("error", () => {});
     child.stdin.end(options.input ?? "");
   });
 }
