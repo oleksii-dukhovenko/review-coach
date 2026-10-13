@@ -82,6 +82,15 @@ check_port_free() {
   others="$(docker ps --filter "publish=${port:-4477}" --format '{{.Names}}|{{.Label "com.docker.compose.project.working_dir"}}' \
     | grep -v "|$INSTALL_DIR\$" || true)"
   [ -z "$others" ] || fail "Port ${port:-4477} is taken by another copy: ${others%%|*} (from ${others#*|}). Stop it with: docker stop ${others%%|*}"
+  # - An older install without Docker (scripts/install-service.sh) restarts at every login; retire it.
+  if systemctl --user is-active --quiet review-coach.service 2>/dev/null; then
+    say "Stopping the older Review Coach that runs without Docker (review-coach.service)"
+    systemctl --user disable --now review-coach.service >/dev/null 2>&1 || true
+    sleep 1
+  fi
+  if curl -fs "http://127.0.0.1:${port:-4477}/" >/dev/null 2>&1 && [ -z "$(cd "$INSTALL_DIR" && docker compose ps -q 2>/dev/null)" ]; then
+    fail "Something outside Docker already answers on port ${port:-4477}, maybe an old 'npm start'. See what: ss -ltnp | grep ${port:-4477}"
+  fi
 }
 
 start_app() {
