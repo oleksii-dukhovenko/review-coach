@@ -31,7 +31,8 @@ log_in_to_github() {
 get_code() {
   if [ -d "$INSTALL_DIR/.git" ]; then
     say "Updating $INSTALL_DIR"
-    git -C "$INSTALL_DIR" pull --ff-only --quiet
+    git -C "$INSTALL_DIR" pull --ff-only --quiet \
+      || fail "Could not update $INSTALL_DIR: it has local changes, or its branch moved. See: cd $INSTALL_DIR && git status"
   else
     say "Downloading to $INSTALL_DIR"
     git clone --quiet "$REPO_URL" "$INSTALL_DIR"
@@ -74,7 +75,17 @@ install_neovim_links() {
   command -v nvim >/dev/null 2>&1 || say "Tip: install Neovim to use the app's Neovim button."
 }
 
+# Another copy on the same port makes the new one fail to start; name it instead.
+check_port_free() {
+  local port others
+  port="$(env_value REVIEW_COACH_PORT)"
+  others="$(docker ps --filter "publish=${port:-4477}" --format '{{.Names}}|{{.Label "com.docker.compose.project.working_dir"}}' \
+    | grep -v "|$INSTALL_DIR\$" || true)"
+  [ -z "$others" ] || fail "Port ${port:-4477} is taken by another copy: ${others%%|*} (from ${others#*|}). Stop it with: docker stop ${others%%|*}"
+}
+
 start_app() {
+  check_port_free
   say "Building and starting (the first time takes a few minutes)"
   (cd "$INSTALL_DIR" && docker compose up -d --build --quiet-pull)
 }

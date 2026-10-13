@@ -12,7 +12,9 @@ https://github.com/user-attachments/assets/1678edb3-a617-43aa-a9b6-fe573c1b0f66
 curl -fsSL https://raw.githubusercontent.com/oleksii-dukhovenko/review-coach/master/install.sh | bash
 ```
 
-That's it. It opens http://127.0.0.1:4477 when it's ready. **Run the same command to update.**
+That's it. It opens http://127.0.0.1:4477 when it's ready.
+
+**Updating:** the app checks GitHub for new versions. When there is one, click **Update available** in the top bar: it downloads, builds and restarts by itself, and keeps your reviews. Running the install command again also updates.
 
 - You need [Docker](https://docs.docker.com/get-docker/), the [GitHub CLI](https://cli.github.com), and [Claude Code](https://docs.claude.com/en/docs/claude-code) with a Claude subscription.
 - It asks you to log in to GitHub if you aren't, and to paste a Claude token once.
@@ -53,6 +55,8 @@ Run these in `~/review-coach`.
 - **"Could not reach GitHub"** on the page: your GitHub token expired. Run the install command again.
 - **"Preparing is paused"**: Claude hit your usage limit. Click "Retry now" later.
 - **It won't start**: `cd ~/review-coach && docker compose logs`.
+- **"Port 4477 is taken"**: another copy is still running. `docker ps` shows it; `docker stop <name>` frees the port.
+- **"Run the install command" after Update**: that update changes the app's container itself, which the button cannot do. Run the install command once.
 
 <details>
 <summary><strong>Run it without Docker, how it works, and settings</strong></summary>

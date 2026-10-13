@@ -27,9 +27,12 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+# - version.json records the commit, so the app can tell when GitHub has a newer one; .git is not kept.
+RUN npm run build && node_modules/.bin/tsx server/writeVersion.ts && rm -rf .git
 
 USER node
 ENV REVIEW_COACH_HOST=0.0.0.0
+# - Lets the app update itself: Docker's restart policy brings it back after it exits.
+ENV REVIEW_COACH_IN_DOCKER=1
 EXPOSE 4477
 ENTRYPOINT ["/app/docker/entrypoint.sh"]

@@ -8,6 +8,7 @@ import { resetUnfinishedJobs } from "./db.ts";
 import { startInboxWatcher } from "./inbox.ts";
 import { stopAllServers } from "./languageServers.ts";
 import { buildRoutes } from "./routes.ts";
+import { confirmStarted, startUpdateChecks } from "./selfUpdate.ts";
 
 const webRoot = path.relative(process.cwd(), config.webDistDir);
 
@@ -26,7 +27,9 @@ process.on("SIGINT", shutDown);
 
 resetUnfinishedJobs();
 startInboxWatcher(config.pollMinutes);
+startUpdateChecks();
 
 serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
   console.log(`Review Coach on http://${config.host}:${info.port}`);
+  confirmStarted();
 });
