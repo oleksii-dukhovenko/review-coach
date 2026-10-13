@@ -2,9 +2,9 @@
 
 A PR review inbox that coaches you through each review with Claude, instead of reviewing for you.
 
-https://github.com/user-attachments/assets/1678edb3-a617-43aa-a9b6-fe573c1b0f66
+<a href="docs/media/demo.mp4"><img src="docs/media/demo.gif" width="100%" alt="The inbox, a PR's overview, zooming into a box of the big picture, then a step where a line gets a review comment and a question for Claude"></a>
 
-<sub>A review in a minute: open a PR, zoom into the big picture, read a step, click a line to comment or ask.</sub>
+<sub>A review in a minute: open a PR, zoom into the big picture, read a step, click a line to comment or ask. Click it for the full-quality video.</sub>
 
 ## Install
 
