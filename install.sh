@@ -31,7 +31,8 @@ log_in_to_github() {
 get_code() {
   if [ -d "$INSTALL_DIR/.git" ]; then
     say "Updating $INSTALL_DIR"
-    git -C "$INSTALL_DIR" pull --ff-only --quiet
+    git -C "$INSTALL_DIR" pull --ff-only --quiet \
+      || fail "Could not update $INSTALL_DIR: it has local changes, or its branch moved. See: cd $INSTALL_DIR && git status"
   else
     say "Downloading to $INSTALL_DIR"
     git clone --quiet "$REPO_URL" "$INSTALL_DIR"
@@ -74,7 +75,32 @@ install_neovim_links() {
   command -v nvim >/dev/null 2>&1 || say "Tip: install Neovim to use the app's Neovim button."
 }
 
+# An install from scripts/install-service.sh, running or set to start at login.
+has_old_service() {
+  systemctl --user is-active --quiet review-coach.service 2>/dev/null \
+    || systemctl --user is-enabled --quiet review-coach.service 2>/dev/null
+}
+
+# Another copy on the same port makes the new one fail to start; name it instead.
+check_port_free() {
+  local port others
+  port="$(env_value REVIEW_COACH_PORT)"
+  others="$(docker ps --filter "publish=${port:-4477}" --format '{{.Names}}|{{.Label "com.docker.compose.project.working_dir"}}' \
+    | grep -v "|$INSTALL_DIR\$" || true)"
+  [ -z "$others" ] || fail "Port ${port:-4477} is taken by another copy: ${others%%|*} (from ${others#*|}). Stop it with: docker stop ${others%%|*}"
+  # - An older install without Docker (scripts/install-service.sh) restarts at every login; retire it.
+  if has_old_service; then
+    say "Stopping the older Review Coach that runs without Docker (review-coach.service)"
+    systemctl --user disable --now review-coach.service >/dev/null 2>&1 || true
+    sleep 1
+  fi
+  if curl -fs "http://127.0.0.1:${port:-4477}/" >/dev/null 2>&1 && [ -z "$(cd "$INSTALL_DIR" && docker compose ps -q 2>/dev/null)" ]; then
+    fail "Something outside Docker already answers on port ${port:-4477}, maybe an old 'npm start'. See what: ss -ltnp | grep ${port:-4477}"
+  fi
+}
+
 start_app() {
+  check_port_free
   say "Building and starting (the first time takes a few minutes)"
   (cd "$INSTALL_DIR" && docker compose up -d --build --quiet-pull)
 }

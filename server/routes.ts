@@ -14,6 +14,7 @@ import { rewriteInPlainWords } from "./plainWords.ts";
 import { replyToThread, submitReview, type ReviewSubmission } from "./posting.ts";
 import { enqueue, isPaused, resumeQueue } from "./queue.ts";
 import { findReferences, isIdentifier, readFileView, readSnippet, warmUpForPr, type ReferenceQuery } from "./references.ts";
+import { checkForUpdate, startUpdate, versionInfo } from "./selfUpdate.ts";
 import { prKeyOf, type PullRequest } from "./types.ts";
 
 function mainJobs(pr: PullRequest) {
@@ -197,6 +198,13 @@ export function buildRoutes(): Hono {
   });
 
   api.post(`${prPath}/picture-nodes`, async (context) => context.json(await pictureNodes(requirePr(context).key)));
+
+  api.get("/version", async (context) => {
+    if (context.req.query("check")) await checkForUpdate();
+    return context.json(versionInfo());
+  });
+
+  api.post("/update", (context) => context.json(startUpdate()));
 
   api.get("/concepts", (context) => context.json(listConcepts()));
 

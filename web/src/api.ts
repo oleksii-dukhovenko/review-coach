@@ -3,9 +3,10 @@ import type { AskRecord, JobRecord } from "../../server/db.ts";
 import type { ReviewCommentInput, ReviewEvent } from "../../server/github.ts";
 import type { MainJobKind } from "../../server/jobKinds.ts";
 import type { AutoPrepare, MyPrSection } from "../../server/myPrSections.ts";
+import type { VersionInfo } from "../../server/selfUpdate.ts";
 import type { JobStatus, PrKind, PullRequest } from "../../server/types.ts";
 
-export type { AutoPrepare, MyPrSection };
+export type { AutoPrepare, MyPrSection, VersionInfo };
 export type { Concept, AskRecord, JobRecord, MainJobKind, ReviewCommentInput, ReviewEvent, PullRequest };
 export type { Walkthrough, Triage, Guide, HardIdea, PictureNode } from "../../server/schemas.ts";
 import type { PictureNode } from "../../server/schemas.ts";
@@ -86,6 +87,8 @@ export const api = {
   refreshInbox: () => requestJson("POST", "/api/inbox/refresh"),
   setAutoPrepare: (mode: AutoPrepare) => requestJson<{ mode: AutoPrepare }>("PUT", "/api/settings/auto-prepare", { mode }),
   resumeQueue: () => requestJson("POST", "/api/queue/resume"),
+  version: (shouldCheck = false) => requestJson<VersionInfo>("GET", `/api/version${shouldCheck ? "?check=1" : ""}`),
+  update: () => requestJson<VersionInfo>("POST", "/api/update"),
   setAutoUpdate: (route: PrRoute, isOn: boolean) => requestJson<{ isOn: boolean }>("PUT", `${prUrl(route)}/auto-update`, { isOn }),
   prPage: (route: PrRoute) => requestJson<PrPageData>("GET", prUrl(route)),
   prepare: (route: PrRoute) => requestJson("POST", `${prUrl(route)}/prepare`),

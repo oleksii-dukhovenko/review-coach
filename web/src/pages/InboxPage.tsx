@@ -6,6 +6,7 @@ import { ErrorBanner } from "../components/basics.tsx";
 import { BrandMark } from "../components/BrandMark.tsx";
 import { Icon } from "../components/Icon.tsx";
 import { ThemePicker } from "../components/ThemePicker.tsx";
+import { UpdateNotice, useVersion, VersionLine, type VersionState } from "../components/UpdateNotice.tsx";
 import { Working } from "../components/Working.tsx";
 import {
   isReadyToRead, matchesQuery, matchesShow, rowsOfSection, timeAgo, type InboxSectionKey, type InboxShow,
@@ -290,8 +291,8 @@ function checkedAt(inbox: Inbox | null): string | null {
   return `Checked GitHub at ${new Date(inbox.lastPollAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
 }
 
-function TopBar({ inbox, query, onQuery, isRefreshing, onRefresh }: {
-  inbox: Inbox | null; query: string; onQuery: (query: string) => void; isRefreshing: boolean; onRefresh: () => void;
+function TopBar({ inbox, query, onQuery, isRefreshing, onRefresh, version }: {
+  inbox: Inbox | null; query: string; onQuery: (query: string) => void; isRefreshing: boolean; onRefresh: () => void; version: VersionState;
 }) {
   const input = useRef<HTMLInputElement>(null);
   useSlashToFilter(input);
@@ -306,6 +307,7 @@ function TopBar({ inbox, query, onQuery, isRefreshing, onRefresh }: {
           <kbd>/</kbd>
         </label>
         <span className="topbar-spacer" />
+        <UpdateNotice version={version} />
         <span className="small muted topbar-checked">{isRefreshing ? "Checking GitHub..." : checkedAt(inbox)}</span>
         <button className="icon-button" disabled={isRefreshing} onClick={onRefresh} aria-label="Check GitHub now" title="Check GitHub now">
           <Icon name="refresh" size={16} />
@@ -323,6 +325,7 @@ export function InboxPage() {
   const [chosen, setChosen] = useState<InboxSectionKey>(savedSection);
   const [show, setShow] = useState<InboxShow>("all");
   const [query, setQuery] = useState("");
+  const version = useVersion();
   useMenusClose();
 
   const load = () => api.inbox().then(setInbox, (loadError: Error) => setError(loadError.message));
@@ -349,7 +352,7 @@ export function InboxPage() {
     setQuery("");
   };
 
-  const topBar = <TopBar inbox={inbox} query={query} onQuery={setQuery} isRefreshing={isRefreshing} onRefresh={() => void refreshFromGitHub()} />;
+  const topBar = <TopBar inbox={inbox} query={query} onQuery={setQuery} isRefreshing={isRefreshing} onRefresh={() => void refreshFromGitHub()} version={version} />;
   if (!inbox) return <>{topBar}<main className="content"><p className="muted">{error ?? "Loading..."}</p></main></>;
 
   const isSearching = query.trim() !== "";
@@ -374,6 +377,7 @@ export function InboxPage() {
             <NavItem key={mine.key} section={mine} count={rowsOfSection(inbox, mine.key).length} isChosen={!isSearching && chosen === mine.key} onPick={() => pick(mine.key)} />
           ))}
           <AutoPrepareSetting mode={inbox.autoPrepare} onChange={changeAutoPrepare} />
+          <VersionLine version={version} />
         </nav>
         <main className="inbox-body">
           <div className="inbox-heading">

@@ -2,9 +2,9 @@
 
 A PR review inbox that coaches you through each review with Claude, instead of reviewing for you.
 
-https://github.com/user-attachments/assets/1678edb3-a617-43aa-a9b6-fe573c1b0f66
+<a href="docs/media/demo.mp4"><img src="docs/media/demo.gif" width="100%" alt="The inbox, a PR's overview, zooming into a box of the big picture, then a step where a line gets a review comment and a question for Claude"></a>
 
-<sub>A review in a minute: open a PR, zoom into the big picture, read a step, click a line to comment or ask.</sub>
+<sub>A review in a minute: open a PR, zoom into the big picture, read a step, click a line to comment or ask. Click it for the full-quality video.</sub>
 
 ## Install
 
@@ -12,7 +12,11 @@ https://github.com/user-attachments/assets/1678edb3-a617-43aa-a9b6-fe573c1b0f66
 curl -fsSL https://raw.githubusercontent.com/oleksii-dukhovenko/review-coach/master/install.sh | bash
 ```
 
-That's it. It opens http://127.0.0.1:4477 when it's ready. **Run the same command to update.**
+That's it. It opens http://127.0.0.1:4477 when it's ready.
+
+**Updating:** the app checks GitHub for new versions. When there is one, click **Update available** in the top bar: it downloads, builds and restarts by itself, and keeps your reviews. Running the install command again also updates.
+
+**Copies without that button** (installed before it existed, or run without Docker): run the install command once. It updates the copy, and stops `review-coach.service`, the older copy that runs without Docker.
 
 - You need [Docker](https://docs.docker.com/get-docker/), the [GitHub CLI](https://cli.github.com), and [Claude Code](https://docs.claude.com/en/docs/claude-code) with a Claude subscription.
 - It asks you to log in to GitHub if you aren't, and to paste a Claude token once.
@@ -53,6 +57,9 @@ Run these in `~/review-coach`.
 - **"Could not reach GitHub"** on the page: your GitHub token expired. Run the install command again.
 - **"Preparing is paused"**: Claude hit your usage limit. Click "Retry now" later.
 - **It won't start**: `cd ~/review-coach && docker compose logs`.
+- **"Port 4477 is taken"**: another copy is still running. `docker ps` shows it; `docker stop <name>` frees the port.
+- **"Something outside Docker already answers on port 4477"**: a copy started without Docker, e.g. `npm start`. `ss -ltnp | grep 4477` shows it; stop it.
+- **"Run the install command" after Update**: that update changes the app's container itself, which the button cannot do. Run the install command once.
 
 <details>
 <summary><strong>Run it without Docker, how it works, and settings</strong></summary>
@@ -69,7 +76,7 @@ npm install && npm run build && npm start     # http://127.0.0.1:4477
 
 - `npm run dev`: server with reload, plus Vite on port 4478.
 - `npm test`: tests for the parts that do not use AI.
-- `scripts/install-service.sh`: start it at login as a systemd user service.
+- `scripts/install-service.sh`: start it at login as a systemd user service. The install command stops and disables this service.
 
 ### What is inside the Docker image
 
@@ -111,7 +118,7 @@ npm install && npm run build && npm start     # http://127.0.0.1:4477
 - `REVIEW_COACH_REPOS`: only watch these repos, comma-separated, e.g. `Round2POS/hyperion,Round2POS/crm`. Empty watches all.
 - `REVIEW_COACH_DATA_DIR`: where checkouts and the database live. Default `~/.cache/review-coach`.
 - `REVIEW_COACH_MODEL`: Claude model for walkthroughs and questions. Default is your Claude Code default.
-- `REVIEW_COACH_TERMINAL`: terminal for the Neovim button, e.g. `ptyxis`, `kitty`, `alacritty`. Default is the first one installed. The button needs Neovim with diffview.nvim, and only works without Docker.
+- `REVIEW_COACH_TERMINAL`: terminal for the Neovim button, e.g. `ptyxis`, `kitty`, `alacritty`. Default is the first one installed. With Docker, `.env` does not set it: `review-coach-open` on your computer reads it.
 - `FLUTTER_ROOT`, `PUB_CACHE`: where Dart packages live. Defaults are `~/flutter` and `~/.pub-cache`.
 - Language servers need `gopls` and `dart` on the service's `PATH`. The TypeScript server ships with this project.
 - Dart checkouts get a generated `.dart_tool/package_config.json` from the lockfile and pub cache, so no network `pub get` is needed.

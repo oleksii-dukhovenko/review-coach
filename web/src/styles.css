@@ -265,6 +265,25 @@ textarea { min-height: 72px; resize: vertical; }
 .menu > a, .menu > .switch { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 10px; border-radius: 6px; color: var(--text); font-size: 13.5px; }
 .menu > a:hover, .menu > .switch:hover { background: var(--surface-muted); text-decoration: none; }
 
+/* Update button and version line */
+.update-pill {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--color-accent-700); font-size: 13px; font-weight: 500; white-space: nowrap;
+}
+.update-pill.is-working { background: var(--working-soft); color: var(--working); }
+.update-pill.is-failed { background: var(--problem-soft); color: var(--problem); }
+.row-menu.update-menu > summary { display: inline-flex; width: auto; height: auto; border-radius: 999px; color: var(--color-accent-700); }
+.row-menu.update-menu > summary.is-failed { color: var(--problem); }
+.row-menu.update-menu > summary:hover, .row-menu.update-menu[open] > summary { background: var(--color-accent-200); }
+.update-panel { width: min(360px, calc(100vw - 32px)); padding: 14px; gap: 10px; align-items: flex-start; }
+.update-panel p { margin: 0; }
+.update-title { font-weight: 600; }
+.update-commits { margin: 0; padding-left: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
+.update-error { color: var(--problem); overflow-wrap: anywhere; }
+.install-command { display: block; width: 100%; padding: 8px 10px; border-radius: var(--radius-md); background: var(--surface-muted); font: 11.5px/1.5 var(--mono); overflow-wrap: anywhere; }
+.version-line { margin-top: 12px; padding: 0 10px; }
+.version-line .link-button { font-size: 12px; }
+
 .icon-link { color: var(--text-muted); display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: var(--radius-small); }
 .icon-link:hover { background: var(--surface-muted); color: var(--text); }
 .empty { padding: 12px 0; color: var(--text-muted); }
