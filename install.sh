@@ -75,6 +75,12 @@ install_neovim_links() {
   command -v nvim >/dev/null 2>&1 || say "Tip: install Neovim to use the app's Neovim button."
 }
 
+# An install from scripts/install-service.sh, running or set to start at login.
+has_old_service() {
+  systemctl --user is-active --quiet review-coach.service 2>/dev/null \
+    || systemctl --user is-enabled --quiet review-coach.service 2>/dev/null
+}
+
 # Another copy on the same port makes the new one fail to start; name it instead.
 check_port_free() {
   local port others
@@ -83,7 +89,7 @@ check_port_free() {
     | grep -v "|$INSTALL_DIR\$" || true)"
   [ -z "$others" ] || fail "Port ${port:-4477} is taken by another copy: ${others%%|*} (from ${others#*|}). Stop it with: docker stop ${others%%|*}"
   # - An older install without Docker (scripts/install-service.sh) restarts at every login; retire it.
-  if systemctl --user is-active --quiet review-coach.service 2>/dev/null; then
+  if has_old_service; then
     say "Stopping the older Review Coach that runs without Docker (review-coach.service)"
     systemctl --user disable --now review-coach.service >/dev/null 2>&1 || true
     sleep 1
