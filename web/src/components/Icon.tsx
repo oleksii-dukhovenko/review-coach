@@ -30,6 +30,8 @@ const PHOSPHOR = {
   moon: "moon",
   desktop: "desktop",
   magnifyPlus: "magnifying-glass-plus",
+  search: "magnifying-glass",
+  more: "dots-three",
 } as const;
 
 export type IconName = keyof typeof PHOSPHOR;

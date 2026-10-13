@@ -1,0 +1,190 @@
+/* Design tokens and small component classes: cool greys, one indigo accent, and status colors on one lightness scale. */
+
+:root {
+  --color-bg: #f5f6f8;
+  /* Cards, rows, menus: the raised surface. */
+  --color-card: #ffffff;
+  /* Code, inputs, quiet fills: a step below the page. */
+  --color-surface: #eef0f3;
+  --color-text: #1c2128;
+  --color-text-muted: #59636e;
+  --color-border: #e1e5ea;
+  --color-divider: #c9d0d8;
+  --color-accent: #4354b3;
+  --color-on-accent: #ffffff;
+  /* Questions and work in progress. */
+  --color-accent-2: #7f55c6;
+
+  /* Tonal ramps — generated in OKLCH on one shared lightness scale, so the
+     same step of any role matches the others in visual value. Step 700 is
+     the text step: at least 4.5:1 on the page, a card, and its own 100 tint. */
+  --color-neutral-100: #f4f7fc; --color-neutral-200: #e6eaee; --color-neutral-300: #d1d4d9; --color-neutral-400: #b4b8bc; --color-neutral-500: #92959a; --color-neutral-600: #6f7276; --color-neutral-700: #5c5f63; --color-neutral-800: #434549; --color-neutral-900: #2b2e31;
+  --color-accent-100: #f4f6ff; --color-accent-200: #e2e9ff; --color-accent-300: #c5d3fe; --color-accent-400: #9fb3fe; --color-accent-500: #748cf7; --color-accent-600: #5366ce; --color-accent-700: #4354b3; --color-accent-800: #2f3c88; --color-accent-900: #1e275d;
+  --color-accent-2-100: #f8f5ff; --color-accent-2-200: #ece5ff; --color-accent-2-300: #dacbff; --color-accent-2-400: #c1a5fe; --color-accent-2-500: #a37aef; --color-accent-2-600: #7f55c6; --color-accent-2-700: #6c43ac; --color-accent-2-800: #502e83; --color-accent-2-900: #351e59;
+  --color-green-100: #ecfcef; --color-green-200: #d5f3da; --color-green-300: #b0e3b9; --color-green-400: #82cb92; --color-green-500: #52ab69; --color-green-600: #298646; --color-green-700: #167236; --color-green-800: #065424; --color-green-900: #053817;
+  --color-red-100: #fff4f2; --color-red-200: #ffe2de; --color-red-300: #ffc4bc; --color-red-400: #ff968b; --color-red-500: #eb6459; --color-red-600: #c13c36; --color-red-700: #a72b27; --color-red-800: #7e1918; --color-red-900: #56100e;
+  --color-amber-100: #fff5e9; --color-amber-200: #fde6c6; --color-amber-300: #f5cd96; --color-amber-400: #e4ac5a; --color-amber-500: #c78707; --color-amber-600: #98660a; --color-amber-700: #805503; --color-amber-800: #5e3e04; --color-amber-900: #402801;
+
+  --font-heading: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-heading-weight: 600;
+  --font-body: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Step text and questions. Set to a serif here for a more bookish read. */
+  --font-reading: var(--font-body);
+  --font-mono: "Geist Mono", ui-monospace, Menlo, monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.06);
+  --shadow-md: 0 4px 12px rgb(16 24 40 / 0.08), 0 1px 3px rgb(16 24 40 / 0.06);
+  --shadow-lg: 0 16px 40px rgb(16 24 40 / 0.14);
+}
+
+/* Dark: the same ramps, reversed, so light tints become dark tints and ink becomes light. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #0f1216;
+  --color-card: #171b21;
+  --color-surface: #1e232b;
+  --color-text: #e6e9ef;
+  --color-text-muted: #9ba5b4;
+  --color-border: #2a3039;
+  --color-divider: #3a424d;
+  --color-accent: #9fb3fe;
+  --color-on-accent: #0f1216;
+  --color-accent-2: #a37aef;
+
+  --color-neutral-100: #2b2e31; --color-neutral-200: #434549; --color-neutral-300: #5c5f63; --color-neutral-400: #6f7276; --color-neutral-500: #92959a; --color-neutral-600: #b4b8bc; --color-neutral-700: #d1d4d9; --color-neutral-800: #e6eaee; --color-neutral-900: #f4f7fc;
+  --color-accent-100: #171e3b; --color-accent-200: #1e275d; --color-accent-300: #2f3c88; --color-accent-400: #4354b3; --color-accent-500: #5366ce; --color-accent-600: #748cf7; --color-accent-700: #9fb3fe; --color-accent-800: #c5d3fe; --color-accent-900: #e2e9ff;
+  --color-accent-2-100: #241939; --color-accent-2-200: #351e59; --color-accent-2-300: #502e83; --color-accent-2-400: #6c43ac; --color-accent-2-500: #7f55c6; --color-accent-2-600: #a37aef; --color-accent-2-700: #c1a5fe; --color-accent-2-800: #dacbff; --color-accent-2-900: #ece5ff;
+  --color-green-100: #0f2614; --color-green-200: #053817; --color-green-300: #065424; --color-green-400: #167236; --color-green-500: #298646; --color-green-600: #52ab69; --color-green-700: #82cb92; --color-green-800: #b0e3b9; --color-green-900: #d5f3da;
+  --color-red-100: #381310; --color-red-200: #56100e; --color-red-300: #7e1918; --color-red-400: #a72b27; --color-red-500: #c13c36; --color-red-600: #eb6459; --color-red-700: #ff968b; --color-red-800: #ffc4bc; --color-red-900: #ffe2de;
+  --color-amber-100: #2e1c02; --color-amber-200: #402801; --color-amber-300: #5e3e04; --color-amber-400: #805503; --color-amber-500: #98660a; --color-amber-600: #c78707; --color-amber-700: #e4ac5a; --color-amber-800: #f5cd96; --color-amber-900: #fde6c6;
+
+  --shadow-sm: 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-md: 0 0 0 1px rgb(255 255 255 / 0.06), 0 6px 18px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 0 0 1px rgb(255 255 255 / 0.08), 0 16px 40px rgb(0 0 0 / 0.5);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Components — built with the tokens above. Plain CSS on plain HTML.
+   ══════════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font-size: 14px; line-height: 1.5; font-weight: 400; }
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  line-height: 1.25; letter-spacing: -0.01em; margin: 0 0 var(--space-2);
+}
+h1 { font-size: 24px; }
+h2 { font-size: 18px; }
+h3 { font-size: 15px; }
+h4 { font-size: 14px; }
+h5 { font-size: 13px; }
+h6 { font-size: 12px; color: var(--color-text-muted); }
+p { margin: 0 0 var(--space-3); }
+a { color: var(--color-accent); text-underline-offset: 3px; }
+img { display: block; max-width: 100%; }
+figure { margin: 0; }
+figcaption { font-size: 12px; margin-top: var(--space-1); color: var(--color-text-muted); }
+.text-muted { color: var(--color-text-muted); }
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+::selection { background: color-mix(in srgb, var(--color-accent) 25%, transparent); }
+
+/* — rules — */
+.hr {
+  height: 1px; border: 0; margin: var(--space-4) 0;
+  background: var(--color-border);
+}
+
+/* — buttons — */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  cursor: pointer; text-decoration: none;
+  font-family: var(--font-body); font-weight: 500;
+  font-size: 14px; line-height: 1.2; color: var(--color-text);
+  background: transparent; border: 1px solid transparent;
+  min-height: 36px; padding: 0 14px;
+  border-radius: var(--radius-md);
+}
+.btn svg { display: block; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn:hover { text-decoration: none; }
+.btn-primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn-primary:hover { background: var(--color-accent-800); color: var(--color-on-accent); }
+.btn-primary:active { background: var(--color-accent-900); }
+.btn-secondary { border-color: var(--color-divider); background: var(--color-card); }
+.btn-secondary:hover { background: var(--color-surface); }
+.btn-secondary:active { background: var(--color-neutral-200); }
+.btn-ghost { color: var(--color-accent); padding-inline: var(--space-2); }
+.btn-ghost:hover { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+.btn-ghost:active { background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+.btn-icon { width: 36px; height: 36px; padding: 0; }
+.btn-block { width: 100%; margin-top: var(--space-2); }
+
+/* — forms — */
+.field > label {
+  display: block; font-size: 12px; margin-bottom: 5px;
+  color: var(--color-text-muted);
+}
+.input {
+  width: 100%; min-height: 36px; padding: 6px 10px; font: inherit;
+  font-size: 14px; color: var(--color-text); caret-color: var(--color-accent);
+  background: var(--color-card);
+  border: 1px solid var(--color-divider); border-radius: var(--radius-md);
+}
+.input::placeholder { color: var(--color-text-muted); opacity: 1; }
+.input:hover { border-color: var(--color-neutral-500); }
+.input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }
+textarea.input { min-height: 90px; resize: vertical; }
+.radio { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
+.radio input, .seg-opt input {
+  position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;
+}
+.radio .dot {
+  width: 16px; height: 16px; flex: none; border-radius: 50%;
+  border: 1.5px solid var(--color-divider);
+}
+.radio:hover .dot { border-color: var(--color-accent); }
+.radio input:checked + .dot {
+  border-color: var(--color-accent); background: var(--color-accent);
+  box-shadow: inset 0 0 0 4px var(--color-card);
+}
+.radio input:focus-visible + .dot { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+/* Segmented control: a track with the chosen option raised. */
+.seg {
+  display: inline-flex; gap: 2px; padding: 3px;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: calc(var(--radius-md) + 1px);
+}
+.seg-opt {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 30px;
+  padding: 0 12px; font-size: 13px; cursor: pointer; border-radius: 6px; color: var(--color-text-muted);
+}
+.seg-opt:has(input:checked) { background: var(--color-card); color: var(--color-text); font-weight: 500; box-shadow: var(--shadow-sm), 0 0 0 1px var(--color-border); }
+.seg-opt:not(:has(input:checked)):hover { color: var(--color-text); }
+.seg-opt:has(input:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+
+/* — tags — */
+.tag {
+  display: inline-flex; align-items: center; font-size: 12px; font-weight: 500;
+  padding: 2px 8px; border-radius: var(--radius-sm);
+}
+.tag-accent { background: var(--color-accent-100); color: var(--color-accent-700); }
+.tag-accent-2 { background: var(--color-accent-2-100); color: var(--color-accent-2-700); }
+.tag-neutral { background: var(--color-surface); color: var(--color-text-muted); }
+.tag-outline { border: 1px solid var(--color-accent); color: var(--color-accent); }

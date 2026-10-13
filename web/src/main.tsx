@@ -3,11 +3,10 @@ import { createRoot } from "react-dom/client";
 
 import type { PrRoute } from "./api.ts";
 import type { EssayView } from "./essay/session.ts";
-import { ThemePicker } from "./components/ThemePicker.tsx";
 import { InboxPage } from "./pages/InboxPage.tsx";
 import { PrPage } from "./pages/PrPage.tsx";
 import { useScrollHistory } from "./scrollHistory.ts";
-import "./broadsheet.css";
+import "./tokens.css";
 import "./styles.css";
 
 // - A tab left open across a rebuild asks for old chunks; reload once.
@@ -82,20 +81,12 @@ function App() {
   }, [route?.owner, route?.repo, route?.number]);
   return (
     <div className="app">
-      {route ? null : (
-        <header className="topbar">
-          <div className="topbar-inner">
-            <a href="#/" className="brand">Review Coach</a>
-            <a href="#/" className="topbar-link">Inbox</a>
-            <span className="topbar-spacer" />
-            <ThemePicker />
-          </div>
-        </header>
-      )}
-      <main className={route ? "content is-pr" : "content"}>
-        {route ? <PrPage key={`${route.owner}/${route.repo}/${route.number}`} route={route} view={viewFromHash(hash)}
-          goTo={(view) => { window.location.hash = hashFor(route, view); }} /> : <InboxPage />}
-      </main>
+      {route ? (
+        <main className="content is-pr">
+          <PrPage key={`${route.owner}/${route.repo}/${route.number}`} route={route} view={viewFromHash(hash)}
+            goTo={(view) => { window.location.hash = hashFor(route, view); }} />
+        </main>
+      ) : <InboxPage />}
     </div>
   );
 }

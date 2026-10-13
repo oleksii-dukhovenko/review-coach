@@ -245,7 +245,10 @@ export function foldRows(figure: Figure, isPinned: (line: DiffLine) => boolean):
   return rows;
 }
 
-export type AttentionItem = { title: string; body: string; stepRef: string; stepIndex: number; isLowRisk: boolean };
+// - problem: questions there point at a real bug. hard: an idea that takes care to follow. low: fine to skim.
+export type AttentionRisk = "problem" | "hard" | "low";
+
+export type AttentionItem = { title: string; body: string; stepRef: string; stepIndex: number; risk: AttentionRisk };
 
 const MAX_ATTENTION = 4;
 
@@ -258,22 +261,22 @@ function stepRef(indexes: number[]): string {
 function problemItems(steps: EssayStep[]): AttentionItem[] {
   return steps.filter((step) => step.problemCount > 0).map((step) => ({
     title: step.title,
-    body: `${step.problemCount} question${step.problemCount === 1 ? "" : "s"} here point at a real problem.`,
-    stepRef: stepRef([step.index]), stepIndex: step.index, isLowRisk: false,
+    body: step.problemCount === 1 ? "1 question here points at a real problem." : `${step.problemCount} questions here point at a real problem.`,
+    stepRef: stepRef([step.index]), stepIndex: step.index, risk: "problem",
   }));
 }
 
 function ideaItems(ideas: HardIdea[], steps: EssayStep[]): AttentionItem[] {
   return ideas.map((idea) => {
     const index = Math.max(0, stepOfFile(steps, idea.file));
-    return { title: idea.title, body: idea.oneLiner, stepRef: stepRef([index]), stepIndex: index, isLowRisk: false };
+    return { title: idea.title, body: idea.oneLiner, stepRef: stepRef([index]), stepIndex: index, risk: "hard" };
   });
 }
 
 function lowRiskItem(steps: EssayStep[]): AttentionItem[] {
   const quiet = steps.filter((step) => step.role === "supporting" && step.questionCount === 0);
   if (quiet.length === 0) return [];
-  return [{ title: quiet.length === 1 ? `${quiet[0].title} is low-risk` : "Supporting steps are low-risk", body: "No questions there. Skim it.", stepRef: stepRef(quiet.map((step) => step.index)), stepIndex: quiet[0].index, isLowRisk: true }];
+  return [{ title: quiet.length === 1 ? `${quiet[0].title} is low-risk` : "Supporting steps are low-risk", body: "No questions there. Skim it.", stepRef: stepRef(quiet.map((step) => step.index)), stepIndex: quiet[0].index, risk: "low" }];
 }
 
 /** Ranked: steps with real problems, then hard ideas, then the quiet part to skim. */

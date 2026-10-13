@@ -104,7 +104,7 @@ describe("foldRows", () => {
 describe("attentionItems", () => {
   it("ranks real problems first and ends with the low-risk step", () => {
     const items = attentionItems(buildSteps(data, guide), data.walkthrough.hardIdeas);
-    expect(items.map((item) => [item.title, item.isLowRisk])).toEqual([["Tax", false], ["Rates are floats", false], ["Deps is low-risk", true]]);
+    expect(items.map((item) => [item.title, item.risk])).toEqual([["Tax", "problem"], ["Rates are floats", "hard"], ["Deps is low-risk", "low"]]);
   });
 });
 

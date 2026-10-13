@@ -37,7 +37,7 @@ function FileIndexRow({ listed, session, goTo }: { listed: ListedFile; session: 
         <span className="muted">{folderOf(file.path)}</span>{file.path.split("/").at(-1)}
       </button>
       {diff.status === "modified" ? <span /> : <span className="tag tag-neutral">{diff.status}</span>}
-      <span className="mono"><span className="accent-text">+{counts.adds}</span> <span className="magenta-text">−{counts.dels}</span></span>
+      <span className="mono"><span className="added-count">+{counts.adds}</span> <span className="deleted-count">−{counts.dels}</span></span>
       <button className="step-ref" onClick={() => goTo({ kind: "step", index: listed.stepIndex })}>step {listed.stepIndex + 1}</button>
     </li>
   );
@@ -70,7 +70,7 @@ export function FilesPage({ session, data, steps, goTo }: FilesPageProps) {
         <div className="small-caps"><Icon name="files" /> All files &amp; changes</div>
         <h1 className="essay-title">{data.files.length} files</h1>
         <p className="essay-p">
-          <span className="accent-text">+{totals.adds}</span> <span className="magenta-text">−{totals.dels}</span> lines.
+          <span className="added-count">+{totals.adds}</span> <span className="deleted-count">−{totals.dels}</span> lines.
           Old code on the left, new on the right. Click a file to jump to it.
         </p>
         <ol className="file-index">{files.map((listed) => <FileIndexRow key={listed.file.path} listed={listed} session={session} goTo={goTo} />)}</ol>
