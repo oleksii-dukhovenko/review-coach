@@ -23,7 +23,7 @@ export function OpenInNeovim({ route, file, className = "btn btn-ghost btn-small
       <button className={className} onClick={open} title={file ? `Open ${file} in Neovim` : "Open the whole PR in Neovim"}>
         <Icon name="code" size={15} /> {label}
       </button>
-      {error ? <span className="composer-error">{error}</span> : null}
+      {error ? <span className="composer-error" role="alert">{error}</span> : null}
     </>
   );
 }

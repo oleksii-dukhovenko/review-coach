@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type 
 
 import { api, type DiffFile, type PrRoute, type Snippet } from "../api.ts";
 import { actorOf, changedLinesIn, handOffOf, lanesOf, stepChange, type FlowStep, type StepChange } from "../flowLanes.ts";
+import { useWidgetKeys } from "../keys.ts";
 import { commentFlags } from "./commentLines.ts";
 import { languageForFile, renderCodeLine } from "./highlight.ts";
 import { Icon } from "./Icon.tsx";
@@ -71,12 +72,16 @@ function LinkLayer({ links, selectedIndex }: { links: Link[]; selectedIndex: num
   );
 }
 
-type DiagramProps = { flow: FlowStep[]; files: DiffFile[]; selectedIndex: number; onSelect: (stepIndex: number) => void };
+type StepButtons = RefObject<(HTMLButtonElement | null)[]>;
 
-/** Swimlanes: one column per actor, one row per step, arrows for each hand-off. */
-function SwimlaneDiagram({ flow, files, selectedIndex, onSelect }: DiagramProps) {
+type DiagramProps = { flow: FlowStep[]; files: DiffFile[]; selectedIndex: number; onSelect: (stepIndex: number) => void; nodes: StepButtons };
+
+/**
+ * Swimlanes: one column per actor, one row per step, arrows for each hand-off.
+ * - Only the selected step is a Tab stop.
+ */
+function SwimlaneDiagram({ flow, files, selectedIndex, onSelect, nodes }: DiagramProps) {
   const container = useRef<HTMLDivElement>(null);
-  const nodes = useRef<(HTMLButtonElement | null)[]>([]);
   const links = useLinks(container, nodes, flow);
   const lanes = lanesOf(flow);
   return (
@@ -91,7 +96,8 @@ function SwimlaneDiagram({ flow, files, selectedIndex, onSelect }: DiagramProps)
       {flow.map((step, stepIndex) => (
         <button key={stepIndex} ref={(node) => { nodes.current[stepIndex] = node; }}
           className={`lane-step change-${stepChange(step, files)} ${stepIndex === selectedIndex ? "is-selected" : ""}`}
-          style={{ gridColumn: lanes.indexOf(actorOf(step)) + 1, gridRow: stepIndex + 2 }} onClick={() => onSelect(stepIndex)}>
+          style={{ gridColumn: lanes.indexOf(actorOf(step)) + 1, gridRow: stepIndex + 2 }} tabIndex={stepIndex === selectedIndex ? 0 : -1}
+          onClick={() => onSelect(stepIndex)}>
           <span className="lane-step-number">{stepIndex + 1}</span>
           <span className="lane-step-label">{step.label}</span>
         </button>
@@ -141,25 +147,40 @@ type PlayerProps = {
   onOpenLine: OpenLine;
 };
 
+type StepBarProps = { selectedIndex: number; count: number; onSelect: (stepIndex: number) => void };
+
+/**
+ * Previous and Next.
+ * - At either end the button stays focusable and does nothing.
+ */
+function StepBar({ selectedIndex, count, onSelect }: StepBarProps) {
+  const isFirst = selectedIndex === 0;
+  const isLast = selectedIndex === count - 1;
+  const goBack = () => {
+    if (!isFirst) onSelect(selectedIndex - 1);
+  };
+  const goOn = () => {
+    if (!isLast) onSelect(selectedIndex + 1);
+  };
+  return (
+    <div className="step-player-bar">
+      <button onClick={goBack} aria-disabled={isFirst} aria-label="Previous step" title="Previous step (←)"><Icon name="arrowLeft" /></button>
+      <span className="small muted">Step {selectedIndex + 1} of {count}</span>
+      <button className="primary" onClick={goOn} aria-disabled={isLast} title="Next step (→)">
+        Next <Icon name="arrowRight" size={14} />
+      </button>
+    </div>
+  );
+}
+
 /** One step at a time: what happens, what it hands on, and the code that does it. */
 function StepPlayer({ route, flow, files, selectedIndex, onSelect, onOpenLine }: PlayerProps) {
   const step = flow[selectedIndex];
   const snippet = useSnippet(route, step);
   const change = stepChange(step, files);
-  const goTo = (stepIndex: number) => onSelect(Math.min(Math.max(stepIndex, 0), flow.length - 1));
-  const handleKey = (event: KeyboardEvent) => {
-    if (event.key === "ArrowRight") goTo(selectedIndex + 1);
-    if (event.key === "ArrowLeft") goTo(selectedIndex - 1);
-  };
   return (
-    <div className="step-player" tabIndex={0} onKeyDown={handleKey}>
-      <div className="step-player-bar">
-        <button onClick={() => goTo(selectedIndex - 1)} disabled={selectedIndex === 0} title="Previous step (←)"><Icon name="arrowLeft" /></button>
-        <span className="small muted">Step {selectedIndex + 1} of {flow.length}</span>
-        <button className="primary" onClick={() => goTo(selectedIndex + 1)} disabled={selectedIndex === flow.length - 1} title="Next step (→)">
-          Next <Icon name="arrowRight" size={14} />
-        </button>
-      </div>
+    <div className="step-player" tabIndex={0}>
+      <StepBar selectedIndex={selectedIndex} count={flow.length} onSelect={onSelect} />
       <div className="step-actor small">{actorOf(step)}</div>
       <h3 className="step-title">{step.label}</h3>
       <p className="step-explain">{step.explanation}</p>
@@ -186,13 +207,48 @@ function FlowLegend() {
   );
 }
 
+const FORWARD_KEYS = new Set(["ArrowRight", "ArrowDown", "j"]);
+const BACK_KEYS = new Set(["ArrowLeft", "ArrowUp", "k"]);
+
+function hasModifier(event: KeyboardEvent): boolean {
+  return event.ctrlKey || event.metaKey || event.altKey || event.shiftKey;
+}
+
+/** The step a key moves to, clamped to the ends; undefined for other keys. */
+function stepForKey(key: string, selectedIndex: number, count: number): number | undefined {
+  if (FORWARD_KEYS.has(key)) return Math.min(selectedIndex + 1, count - 1);
+  if (BACK_KEYS.has(key)) return Math.max(selectedIndex - 1, 0);
+  if (key === "Home") return 0;
+  return key === "End" ? count - 1 : undefined;
+}
+
+/**
+ * Arrows, j/k, Home and End move between steps.
+ * - Focus on a lane step follows the selection.
+ */
+function stepKeyHandler(count: number, selectedIndex: number, onSelect: (stepIndex: number) => void, nodes: StepButtons) {
+  return (event: KeyboardEvent) => {
+    const next = hasModifier(event) ? undefined : stepForKey(event.key, selectedIndex, count);
+    const isNewStep = next !== undefined && next !== selectedIndex;
+    if (isNewStep) {
+      event.preventDefault();
+      const isOnLaneStep = nodes.current.includes(event.target as HTMLButtonElement);
+      onSelect(next);
+      if (isOnLaneStep) nodes.current[next]?.focus();
+    }
+  };
+}
+
 /** The run as a picture you can step through. */
 export function FlowDiagram({ route, flow, files, onOpenLine }: { route: PrRoute; flow: FlowStep[]; files: DiffFile[]; onOpenLine: OpenLine }) {
+  useWidgetKeys("flow");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const nodes = useRef<(HTMLButtonElement | null)[]>([]);
+  const handleKey = stepKeyHandler(flow.length, selectedIndex, setSelectedIndex, nodes);
   return (
-    <div className="flow-diagram">
+    <div className="flow-diagram" onKeyDown={handleKey}>
       <div className="flow-picture">
-        <SwimlaneDiagram flow={flow} files={files} selectedIndex={selectedIndex} onSelect={setSelectedIndex} />
+        <SwimlaneDiagram flow={flow} files={files} selectedIndex={selectedIndex} onSelect={setSelectedIndex} nodes={nodes} />
         <FlowLegend />
       </div>
       <StepPlayer route={route} flow={flow} files={files} selectedIndex={selectedIndex} onSelect={setSelectedIndex} onOpenLine={onOpenLine} />

@@ -1,5 +1,6 @@
 const IDENTIFIER_CHAR = /[\w$]/;
 const IDENTIFIER_START = /^[A-Za-z_$]/;
+const KEYWORDS = new Set(["const", "let", "return", "function", "if", "else", "import", "export", "from", "new"]);
 
 type CaretDocument = Document & {
   caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
@@ -33,6 +34,29 @@ export function identifierAround(text: string, offset: number): ClickedWord | un
   while (end < text.length && IDENTIFIER_CHAR.test(text[end])) end++;
   const word = text.slice(start, end);
   return IDENTIFIER_START.test(word) ? { word, column: start } : undefined;
+}
+
+function startsAWord(text: string, offset: number): boolean {
+  const followsWordChar = offset > 0 && IDENTIFIER_CHAR.test(text[offset - 1]);
+  return IDENTIFIER_CHAR.test(text[offset]) && !followsWordChar;
+}
+
+function wordStartOffsets(text: string): number[] {
+  return [...Array(text.length).keys()].filter((offset) => startsAWord(text, offset));
+}
+
+function isListedName(found: ClickedWord | undefined): found is ClickedWord {
+  return found !== undefined && !KEYWORDS.has(found.word);
+}
+
+function firstOfEach(words: ClickedWord[]): ClickedWord[] {
+  return words.filter((word, index) => words.findIndex((other) => other.word === word.word) === index);
+}
+
+/** Every name on a line, once each, where it first appears. */
+export function identifiersOn(text: string): ClickedWord[] {
+  const names = wordStartOffsets(text).map((offset) => identifierAround(text, offset)).filter(isListedName);
+  return firstOfEach(names);
 }
 
 /** The name under the mouse in a code cell, and where it starts. */

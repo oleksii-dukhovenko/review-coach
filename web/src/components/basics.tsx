@@ -19,6 +19,7 @@ export function ProofBadge({ proof }: { proof: Proof }) {
   return (
     <span className={`chip ${proof.status}`} title={proof.note || location}>
       {label}
+      {proof.note ? <span className="visually-hidden">{`: ${proof.note}`}</span> : null}
     </span>
   );
 }
@@ -44,5 +45,5 @@ export function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 export function ErrorBanner({ message }: { message: string | null | undefined }) {
-  return message ? <div className="banner error">{message}</div> : null;
+  return message ? <div className="banner error" role="alert">{message}</div> : null;
 }

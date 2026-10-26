@@ -55,6 +55,11 @@ function isBackKey(key: string): boolean {
   return key === "ArrowUp" || key === "ArrowLeft";
 }
 
+// - Alt+Left and similar stay with the browser.
+function hasModifier(event: KeyboardEvent): boolean {
+  return event.ctrlKey || event.metaKey || event.altKey || event.shiftKey;
+}
+
 function nextStepFor(key: string, step: number, count: number): number | null {
   if (isForwardKey(key)) return (step + 1) % count;
   if (isBackKey(key)) return (step - 1 + count) % count;
@@ -77,7 +82,7 @@ function StepButton({ step, index, player, buttonRef }: { step: StoryStep; index
 function StepList({ steps, player }: { steps: StoryStep[]; player: Player }) {
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const moveWithKeys = (event: KeyboardEvent) => {
-    const next = nextStepFor(event.key, player.step, steps.length);
+    const next = hasModifier(event) ? null : nextStepFor(event.key, player.step, steps.length);
     if (next === null) return;
     event.preventDefault();
     player.show(next);
@@ -131,7 +136,8 @@ export function StoryPicture({ scene, onOpenPart, pinnedStep, withTldr }: StoryP
   const player = useStoryPlayer(card, frames.length, pinnedStep ?? 0, pinnedStep === undefined);
   const label = `${scene.object} ${stepCaption(scene.steps[player.step])}`;
   return (
-    <section ref={card} className="story-card anatomy iso" data-playing={player.isRunning ? "" : undefined} style={STEP_TIME} aria-label="This PR as a story">
+    <section ref={card} className="story-card anatomy iso" data-playing={player.isRunning ? "" : undefined} style={STEP_TIME} aria-label="This PR as a story"
+      onFocus={player.stop}>
       {withTldr ? <p className="story-tldr"><b>In one line:</b> {scene.tldr}</p> : null}
       <div className="story-player">
         <div className="story-drawing">

@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { askQuestion, type AskRecord, type PrRoute } from "../api.ts";
+import { comboOf } from "../keys.ts";
 import { Markdown } from "./basics.tsx";
 import { spanLabel, type LineSpan } from "../../../server/anchors.ts";
 
@@ -47,6 +48,8 @@ export function useLineAsk({ route, file, span, pastAsks }: LineAsk) {
   return { exchanges, isAsking, error, ask };
 }
 
+const ASK_COMBOS = new Set(["Enter", "Mod+Enter"]);
+
 export function AskBox({ route, file, span, pastAsks, onClose }: AskBoxProps) {
   const [draft, setDraft] = useState("");
   const lineAsk = useLineAsk({ route, file, span, pastAsks });
@@ -59,11 +62,16 @@ export function AskBox({ route, file, span, pastAsks, onClose }: AskBoxProps) {
     await lineAsk.ask(question);
   }
 
-  const submitOnEnter = (event: React.KeyboardEvent) => {
-    const isPlainEnter = event.key === "Enter" && !event.shiftKey;
-    if (isPlainEnter) {
+  const handleKey = (event: React.KeyboardEvent) => {
+    if (event.nativeEvent.isComposing) return;
+    const combo = comboOf(event);
+    if (ASK_COMBOS.has(combo)) {
       event.preventDefault();
       void submit();
+    }
+    if (combo === "Escape") {
+      event.preventDefault();
+      onClose();
     }
   };
 
@@ -74,10 +82,10 @@ export function AskBox({ route, file, span, pastAsks, onClose }: AskBoxProps) {
       {error ? <div className="chip failed">{error}</div> : null}
       <textarea
         autoFocus
-        placeholder="What does this do? Why is it here? (Enter to ask, Shift+Enter for a new line)"
+        placeholder="What does this do? Why is it here? (Enter to ask, Shift+Enter for a new line, Escape to close)"
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={submitOnEnter}
+        onKeyDown={handleKey}
       />
       <div className="button-row">
         <button className="primary" disabled={isAsking || !draft.trim()} onClick={() => void submit()}>{isAsking ? "Thinking..." : "Ask"}</button>

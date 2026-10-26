@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, type MouseEvent, type ReactNode } from "react";
 
 import type { Anatomy, Scene, ScenePart, TrainView } from "../../../server/sceneSchema.ts";
 import { drawableScene, drawableTrainScene } from "../anatomy/frame.ts";
@@ -9,6 +9,7 @@ import { Markdown } from "../components/basics.tsx";
 import { Icon } from "../components/Icon.tsx";
 import type { ClickedNode } from "../components/Mermaid.tsx";
 import { Working } from "../components/Working.tsx";
+import { focusQuietly, useKeys, type KeyHandler } from "../keys.ts";
 import { PrHeader, PrTabs, type PrTab } from "../pages/PrHeader.tsx";
 import { BeforeAfter, ChangesBanner, FlowSection, GlossaryTerm, RemovedCodeSection } from "../pages/WalkthroughSections.tsx";
 import { useCodeZoom, ZoomablePicture } from "./PictureZoom.tsx";
@@ -73,7 +74,7 @@ function GuideStatus({ session }: { session: ReviewSession }) {
   return <p className="small muted guide-status"><Working size={13}>Sorting the steps into a reading order. They may change when it is done.</Working></p>;
 }
 
-function firstOpenStep(steps: EssayStep[], session: ReviewSession): EssayStep | undefined {
+export function firstOpenStep(steps: EssayStep[], session: ReviewSession): EssayStep | undefined {
   return steps.find((step) => !isStepDone(step, session));
 }
 
@@ -97,7 +98,7 @@ function ReadingPlan({ session, steps, data, goTo }: { session: ReviewSession; s
   const action = nextAction(steps, session, goTo);
   const stats = diffStats(data);
   return (
-    <aside className="lede-aside" aria-label="Reading plan">
+    <aside id={READING_PLAN_ID} className="lede-aside" aria-label="Reading plan">
       <section className="lede-card reading-plan">
         <div className="plan-head"><h2>Reading plan</h2><span className="small muted">about {total} min</span></div>
         <div className="reading-progress">
@@ -238,14 +239,53 @@ function AnatomyPictures({ session, data, onReload }: { session: ReviewSession; 
   );
 }
 
+const READING_PLAN_ID = "reading-plan";
+
+function focusAndShow(element: Element | null): void {
+  if (!focusQuietly(element)) return;
+  element?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+// - The first big-picture box, else the first story part.
+function firstPictureTarget(): Element | null {
+  return document.querySelector("#picture g.node[tabindex]") ?? document.querySelector(".story-stage .anatomy-part[data-clickable]");
+}
+
+// - Moves focus; leaves the route in the hash alone.
+function SkipToReadingPlan() {
+  const skip = (event: MouseEvent) => {
+    event.preventDefault();
+    focusAndShow(document.getElementById(READING_PLAN_ID));
+  };
+  return <a className="skip-link" href={`#${READING_PLAN_ID}`} onClick={skip}>Skip to reading plan</a>;
+}
+
+function openStepKey(steps: EssayStep[], goTo: (view: EssayView) => void, stepNumber: number): KeyHandler {
+  return { run: () => goTo({ kind: "step", index: stepNumber - 1 }), when: () => stepNumber <= steps.length };
+}
+
+/** n for the plan's main button, 1 to 9 for a step, b for the big picture. */
+function useOverviewKeys(steps: EssayStep[], session: ReviewSession, goTo: (view: EssayView) => void): void {
+  const openStep = (stepNumber: number) => openStepKey(steps, goTo, stepNumber);
+  useKeys("overview", {
+    mainAction: () => nextAction(steps, session, goTo).go(),
+    step1: openStep(1), step2: openStep(2), step3: openStep(3),
+    step4: openStep(4), step5: openStep(5), step6: openStep(6),
+    step7: openStep(7), step8: openStep(8), step9: openStep(9),
+    focusPicture: () => focusAndShow(firstPictureTarget()),
+  });
+}
+
 /** The front page: what this PR does, where to look hardest, and how long it takes. */
 export function LedePage({ session, data, steps, goTo, actions, banners, extra, onReload }: LedeProps) {
+  useOverviewKeys(steps, session, goTo);
   return (
     <div className="lede">
       <PrHeader pr={session.page.pr} actions={actions} tabs={<OverviewTabs steps={steps} data={data} goTo={goTo} session={session} />} />
       {banners}
       <ChangesBanner change={data.changes?.at(-1)} onOpenFile={session.openFile} />
       <div className="lede-grid">
+        <SkipToReadingPlan />
         <div className="lede-main">
           <AnatomyPictures session={session} data={data} onReload={onReload} />
           <section className="lede-card">

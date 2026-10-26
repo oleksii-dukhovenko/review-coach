@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 
 import { api, type PrPageData, type PrRoute, type PullRequest, type Triage, type TriageData } from "../api.ts";
 import { AskBox } from "../components/AskBox.tsx";
 import { CopyButton, Markdown, PatchBlock, ProofBadge } from "../components/basics.tsx";
 import { Icon } from "../components/Icon.tsx";
+import { afterRender } from "../essay/session.ts";
+import { comboOf, focusQuietly, isFocusLost, useWidgetKeys } from "../keys.ts";
 import { useSavedState, type MyPrState, type ReplyState } from "../savedState.ts";
 
 type Thread = PullRequest["openThreads"][number];
@@ -27,9 +29,26 @@ function ReviewerComments({ thread }: { thread: Thread }) {
   );
 }
 
-function ReplyEditor({ route, thread, reply, onChange }: { route: PrRoute; thread: Thread; reply: ReplyState; onChange: (reply: ReplyState) => void }) {
+function replyLabelOf(thread: Thread): string {
+  return `Draft reply to ${thread.comments[0]?.author ?? "the reviewer"} on ${thread.path}`;
+}
+
+/** Focuses the element once React has drawn it, unless focus is elsewhere. */
+function focusIfLostAfterRender(elementRef: RefObject<HTMLElement | null>): void {
+  afterRender(() => {
+    if (isFocusLost()) focusQuietly(elementRef.current);
+  });
+}
+
+type ReplyEditorProps = { route: PrRoute; thread: Thread; reply: ReplyState; onChange: (reply: ReplyState) => void };
+
+/** Posts a reply after asking, and keeps focus on the result. */
+function useReplyPosting({ route, thread, reply, onChange }: ReplyEditorProps) {
   const [isPosting, setIsPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const postedBannerRef = useRef<HTMLDivElement>(null);
+  const postButtonRef = useRef<HTMLButtonElement>(null);
+  const canPost = !isPosting && reply.draft.trim() !== "";
 
   async function post() {
     if (!window.confirm("Post this reply to GitHub?")) return;
@@ -38,22 +57,47 @@ function ReplyEditor({ route, thread, reply, onChange }: { route: PrRoute; threa
     try {
       const { url } = await api.reply(route, thread.id, reply.draft);
       onChange({ ...reply, postedUrl: url });
+      focusIfLostAfterRender(postedBannerRef);
     } catch (postError) {
       setError(postError instanceof Error ? postError.message : String(postError));
+      focusIfLostAfterRender(postButtonRef);
     } finally {
       setIsPosting(false);
     }
   }
 
-  if (reply.postedUrl) return <div className="banner info">Reply posted and confirmed. <a href={reply.postedUrl} target="_blank" rel="noreferrer">Open</a></div>;
+  return { isPosting, error, canPost, post, postedBannerRef, postButtonRef };
+}
+
+function ReplyEditor(props: ReplyEditorProps) {
+  const { thread, reply, onChange } = props;
+  const posting = useReplyPosting(props);
+  useWidgetKeys("replyBox");
+
+  const postOnModEnter = (event: React.KeyboardEvent) => {
+    const isPostKey = comboOf(event) === "Mod+Enter";
+    if (isPostKey && posting.canPost) {
+      event.preventDefault();
+      void posting.post();
+    }
+  };
+
+  if (reply.postedUrl) {
+    return <div ref={posting.postedBannerRef} tabIndex={-1} className="banner info">Reply posted and confirmed. <a href={reply.postedUrl} target="_blank" rel="noreferrer">Open</a></div>;
+  }
   return (
     <div className="draft">
       <h3>Draft reply</h3>
-      <textarea value={reply.draft} onChange={(event) => onChange({ ...reply, draft: event.target.value })} />
+      <textarea
+        aria-label={replyLabelOf(thread)}
+        value={reply.draft}
+        onChange={(event) => onChange({ ...reply, draft: event.target.value })}
+        onKeyDown={postOnModEnter}
+      />
       <div className="button-row">
-        <button className="primary" disabled={isPosting || !reply.draft.trim()} onClick={() => void post()}>{isPosting ? "Posting..." : "Post reply"}</button>
+        <button ref={posting.postButtonRef} className="primary" disabled={!posting.canPost} onClick={() => void posting.post()}>{posting.isPosting ? "Posting..." : "Post reply"}</button>
       </div>
-      {error ? <div className="banner error" style={{ marginTop: 8 }}>Not posted: {error}. Your draft is saved.</div> : null}
+      {posting.error ? <div className="banner error" style={{ marginTop: 8 }}>Not posted: {posting.error}. Your draft is saved.</div> : null}
     </div>
   );
 }
@@ -78,8 +122,27 @@ type ThreadCardProps = {
   onReplyChange: (reply: ReplyState) => void;
 };
 
-function ThreadCard({ route, page, thread, verdict, reply, onReplyChange }: ThreadCardProps) {
+type AskAboutThreadProps = { route: PrRoute; file: string; line: number; side: Thread["side"]; pastAsks: PrPageData["asks"] };
+
+function AskAboutThread({ route, file, line, side, pastAsks }: AskAboutThreadProps) {
+  useWidgetKeys("askBox");
   const [isAskOpen, setIsAskOpen] = useState(false);
+  const askButtonRef = useRef<HTMLButtonElement>(null);
+  const closeAsk = () => {
+    setIsAskOpen(false);
+    focusQuietly(askButtonRef.current);
+  };
+  return (
+    <>
+      <div className="button-row">
+        <button ref={askButtonRef} aria-expanded={isAskOpen} onClick={() => setIsAskOpen(!isAskOpen)}>{isAskOpen ? "Hide questions" : "Ask about this"}</button>
+      </div>
+      {isAskOpen ? <AskBox route={route} file={file} span={{ line, side }} pastAsks={pastAsks} onClose={closeAsk} /> : null}
+    </>
+  );
+}
+
+function ThreadCard({ route, page, thread, verdict, reply, onReplyChange }: ThreadCardProps) {
   const location = `${thread.path}:${thread.line ?? "outdated"}`;
   const draftReply = reply.draft || verdict?.draftReply || "";
   const pastAsks = page.asks.filter((ask) => ask.file === thread.path && ask.line === thread.line);
@@ -105,12 +168,7 @@ function ThreadCard({ route, page, thread, verdict, reply, onReplyChange }: Thre
           {verdict.verdict !== "valid" ? <ReplyEditor route={route} thread={thread} reply={{ ...reply, draft: draftReply }} onChange={onReplyChange} /> : null}
         </>
       ) : null}
-      <div className="button-row">
-        {thread.line ? <button onClick={() => setIsAskOpen(!isAskOpen)}>{isAskOpen ? "Hide questions" : "Ask about this"}</button> : null}
-      </div>
-      {isAskOpen && thread.line ? (
-        <AskBox route={route} file={thread.path} span={{ line: thread.line, side: thread.side }} pastAsks={pastAsks} onClose={() => setIsAskOpen(false)} />
-      ) : null}
+      {thread.line ? <AskAboutThread route={route} file={thread.path} line={thread.line} side={thread.side} pastAsks={pastAsks} /> : null}
     </div>
   );
 }

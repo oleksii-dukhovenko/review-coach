@@ -62,6 +62,28 @@ function splitPath(file: string): { name: string; folder: string } {
 }
 
 const LEAD_CHARS = 24;
+const PAGE_SIZE = 10;
+
+// - How far each key moves the selection.
+// - Home and End move as far as the list goes.
+const STEP_OF_KEY: Record<string, number> = {
+  ArrowDown: 1, j: 1, ArrowUp: -1, k: -1,
+  PageDown: PAGE_SIZE, PageUp: -PAGE_SIZE,
+  End: Infinity, Home: -Infinity,
+};
+
+function hasCommandKey(event: KeyboardEvent): boolean {
+  return event.ctrlKey || event.metaKey || event.altKey;
+}
+
+// - Enter on Close or "Go there" presses that button.
+function isEnterOnButton(event: KeyboardEvent): boolean {
+  return event.key === "Enter" && event.target instanceof HTMLButtonElement;
+}
+
+function clampedIndex(index: number, count: number): number {
+  return Math.min(Math.max(index, 0), count - 1);
+}
 
 /** The first word start at or after index, but never past the match. */
 function wordStartAfter(text: string, index: number, matchIndex: number): number {
@@ -244,15 +266,14 @@ export function PeekReferences({ route, query, onClose, onJump, goLabel }: PeekP
   const selected = orderedReferences[selectedIndex];
   const snippet = useSnippet(route, selected);
 
-  const moveSelection = (step: number) =>
-    setSelectedIndex((current) => Math.min(Math.max(current + step, 0), orderedReferences.length - 1));
+  const moveSelection = (step: number) => setSelectedIndex((current) => clampedIndex(current + step, orderedReferences.length));
 
   const handleKey = (event: KeyboardEvent) => {
+    if (hasCommandKey(event) || isEnterOnButton(event)) return;
     const jumpToSelected = () => selected && onJump(selected);
-    const actions: Record<string, () => void> = {
-      ArrowDown: () => moveSelection(1), ArrowUp: () => moveSelection(-1), Enter: jumpToSelected, Escape: onClose,
-    };
-    const action = actions[event.key];
+    const step = STEP_OF_KEY[event.key];
+    const actions: Record<string, () => void> = { Enter: jumpToSelected, Escape: onClose };
+    const action = step === undefined ? actions[event.key] : () => moveSelection(step);
     if (!action) return;
     event.preventDefault();
     event.stopPropagation();
@@ -267,7 +288,7 @@ export function PeekReferences({ route, query, onClose, onJump, goLabel }: PeekP
           <span className="muted">{search ? countText(search) : "Finding where this is used..."}</span>
           {search ? <PrecisionChip search={search} /> : null}
         </span>
-        <span className="muted small">↑↓ move · Enter go · Esc close <button className="peek-close" onClick={onClose} aria-label="Close"><Icon name="x" /></button></span>
+        <span className="muted small">↑↓ or j k move · Enter go · Esc close <button className="peek-close" onClick={onClose} aria-label="Close"><Icon name="x" /></button></span>
       </div>
       {search?.note ? <div className="peek-note small">{search.note}</div> : null}
       {error ? <div className="banner error" style={{ margin: 8 }}>{error}</div> : null}

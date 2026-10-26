@@ -1,9 +1,11 @@
+import { useActiveAnchor } from "../activeAnchor.ts";
 import type { DiffFile, WalkthroughData } from "../api.ts";
 import { Icon } from "../components/Icon.tsx";
+import { focusQuietly, useKeys } from "../keys.ts";
 import { CodeFigure } from "./CodeFigure.tsx";
 import type { EssayFile, EssayStep } from "./model.ts";
 import { fileAnchorId, type EssayView, type ReviewSession } from "./session.ts";
-import { Rail } from "./StepPage.tsx";
+import { fileKeyHandlers, Rail } from "./StepPage.tsx";
 
 type FilesPageProps = { session: ReviewSession; data: WalkthroughData; steps: EssayStep[]; goTo: (view: EssayView) => void };
 
@@ -20,7 +22,9 @@ function countLines(diff: DiffFile) {
 }
 
 function scrollToFile(path: string) {
-  document.getElementById(fileAnchorId(path))?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const section = document.getElementById(fileAnchorId(path));
+  section?.scrollIntoView({ behavior: "smooth", block: "start" });
+  focusQuietly(section);
 }
 
 function folderOf(path: string): string {
@@ -32,7 +36,7 @@ function FileIndexRow({ listed, session, goTo }: { listed: ListedFile; session: 
   const counts = countLines(diff);
   return (
     <li className="file-index-row">
-      <input type="checkbox" aria-label="Reviewed" checked={session.statusOf(diff) === "reviewed"} onChange={() => session.toggleReviewed(diff)} />
+      <input type="checkbox" aria-label={`Reviewed: ${file.path}`} checked={session.statusOf(diff) === "reviewed"} onChange={() => session.toggleReviewed(diff)} />
       <button className="file-index-path" onClick={() => scrollToFile(file.path)} title={file.path}>
         <span className="muted">{folderOf(file.path)}</span>{file.path.split("/").at(-1)}
       </button>
@@ -59,9 +63,16 @@ function FileChanges({ listed, session }: { listed: ListedFile; session: ReviewS
   );
 }
 
+function useFilesKeys(files: ListedFile[], session: ReviewSession) {
+  const readingId = useActiveAnchor(files.map((listed) => fileAnchorId(listed.file.path)));
+  const reviewable = files.map((listed) => ({ path: listed.file.path, diff: listed.diff }));
+  useKeys("files", fileKeyHandlers(reviewable, readingId, session));
+}
+
 /** Every file the PR touches: an index to jump from, then each file's changes. */
 export function FilesPage({ session, data, steps, goTo }: FilesPageProps) {
   const files = listedFiles(steps);
+  useFilesKeys(files, session);
   const totals = files.map((listed) => countLines(listed.diff)).reduce((sum, counts) => ({ adds: sum.adds + counts.adds, dels: sum.dels + counts.dels }), { adds: 0, dels: 0 });
   return (
     <div className="essay-step">

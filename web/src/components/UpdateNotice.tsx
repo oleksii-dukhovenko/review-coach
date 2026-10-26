@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { api, type VersionInfo } from "../api.ts";
+import { focusQuietly, isFocusLost } from "../keys.ts";
 import { Icon } from "./Icon.tsx";
 import { Working } from "./Working.tsx";
 
@@ -86,18 +87,49 @@ function UpdateBody({ info, onUpdate }: { info: VersionInfo; onUpdate: () => voi
 
 export type VersionState = ReturnType<typeof useVersion>;
 
+/** Closes a details menu once focus moves to something outside it. */
+export function closeMenuOnFocusLeave(event: React.FocusEvent<HTMLDetailsElement>): void {
+  const nextFocus = event.relatedTarget;
+  const isLeaving = nextFocus instanceof Node && !event.currentTarget.contains(nextFocus);
+  if (isLeaving) event.currentTarget.removeAttribute("open");
+}
+
+/** Starts the update, then focuses the working pill once it shows. */
+function useFocusOnWorking(isWorking: boolean, update: () => void) {
+  const pill = useRef<HTMLSpanElement>(null);
+  const wantsPillFocus = useRef(false);
+  // - Only when the Update button took focus with it.
+  useEffect(() => {
+    if (!isWorking) return;
+    const shouldFocusPill = wantsPillFocus.current && isFocusLost();
+    wantsPillFocus.current = false;
+    if (shouldFocusPill) focusQuietly(pill.current);
+  }, [isWorking]);
+  const startUpdate = () => {
+    wantsPillFocus.current = true;
+    update();
+  };
+  return { pill, startUpdate };
+}
+
 /** The top bar's update button: shows when GitHub has newer commits, and runs the update. */
 export function UpdateNotice({ version }: { version: VersionState }) {
   const { info, isWaitingForRestart, update } = version;
-  if (isWaitingForRestart || isUpdating(info)) {
-    return <span className="update-pill is-working"><Working size={13}>{isWaitingForRestart ? "Restarting" : PHASE_TEXT[info!.phase]}…</Working></span>;
+  const isWorking = isWaitingForRestart || isUpdating(info);
+  const { pill, startUpdate } = useFocusOnWorking(isWorking, update);
+  if (isWorking) {
+    return (
+      <span ref={pill} className="update-pill is-working" role="status" tabIndex={-1}>
+        <Working size={13}>{isWaitingForRestart ? "Restarting" : PHASE_TEXT[info!.phase]}…</Working>
+      </span>
+    );
   }
   if (!info || !info.behindBy) return null;
   const label = info.phase === "failed" ? "Update failed" : "Update available";
   return (
-    <details className="row-menu update-menu">
+    <details className="row-menu update-menu" onBlur={closeMenuOnFocusLeave}>
       <summary className={`update-pill ${info.phase === "failed" ? "is-failed" : ""}`}><Icon name="arrowUp" size={14} /> {label}</summary>
-      <UpdateBody info={info} onUpdate={update} />
+      <UpdateBody info={info} onUpdate={startUpdate} />
     </details>
   );
 }
@@ -109,13 +141,15 @@ export function VersionLine({ version }: { version: VersionState }) {
   if (!info?.current) return null;
   const status = info.behindBy ? `${info.behindBy} behind` : info.behindBy === 0 ? "up to date" : "not checked";
   const recheck = () => {
+    if (isChecking) return;
     setIsChecking(true);
     void check().finally(() => setIsChecking(false));
   };
   return (
-    <div className="version-line small muted" title={info.checkError ?? `Checked ${info.checkedAt ? new Date(info.checkedAt).toLocaleString() : "never"}`}>
+    <div className="version-line small muted" title={`Checked ${info.checkedAt ? new Date(info.checkedAt).toLocaleString() : "never"}`}>
       Version <span className="mono">{info.current.sha.slice(0, 7)}</span> · {status} ·{" "}
-      <button className="link-button" disabled={isChecking} onClick={recheck}>{isChecking ? "Checking..." : "Check"}</button>
+      <button className="link-button" aria-disabled={isChecking} onClick={recheck}>{isChecking ? "Checking..." : "Check"}</button>
+      {info.checkError ? <div className="update-error">{info.checkError}</div> : null}
     </div>
   );
 }

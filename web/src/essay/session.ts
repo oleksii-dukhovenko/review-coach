@@ -5,10 +5,12 @@ import { spanStart, type LineSpan } from "../../../server/anchors.ts";
 import type { ExplainChatState } from "../components/ExplainChat.tsx";
 import { useFileViewer } from "../components/FileViewer.tsx";
 import { jumpToLine } from "../jump.ts";
+import { focusQuietly } from "../keys.ts";
 import { lineTextFor, placeLineComments } from "../placeComments.ts";
 import { diffFingerprint, reviewedStatusOf } from "../reviewedFiles.ts";
 import { useSavedState, type LineComment, type QuestionAnswer, type ReviewState } from "../savedState.ts";
 import { addHistoryStep } from "../scrollHistory.ts";
+import { focusLine } from "./lineCursor.ts";
 import { stepOfFile, type EssayStep } from "./model.ts";
 
 export type EssayView = { kind: "lede" } | { kind: "step"; index: number } | { kind: "finish" } | { kind: "files" };
@@ -82,6 +84,7 @@ function scrollToFileSection(file: string): boolean {
   if (!section) return false;
   addHistoryStep();
   section.scrollIntoView({ behavior: "smooth", block: "start" });
+  focusQuietly(section);
   return true;
 }
 
@@ -122,6 +125,7 @@ export function useReviewSession(route: PrRoute, page: PrPageData, files: DiffFi
   const { conceptsByKey, saveConcept } = useConcepts(page);
   const navigation = useEssayNavigation(steps, view, goTo, viewer);
   const jumpToReference = (reference: Reference) => {
+    if (peek) focusLine(peek.file, peek.line, peek.side);
     setPeek(null);
     if (reference.isInPage) navigation.openLine(reference.file, reference.line, "RIGHT");
     else viewer.open({ file: reference.file, line: reference.line });

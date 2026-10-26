@@ -2,12 +2,15 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import type { PrRoute } from "./api.ts";
+import { KeyHelp, toggleKeyHelp } from "./components/KeyHelp.tsx";
 import type { EssayView } from "./essay/session.ts";
+import { useKeyDispatcher, useKeys } from "./keys.ts";
 import { InboxPage } from "./pages/InboxPage.tsx";
 import { PrPage } from "./pages/PrPage.tsx";
 import { useScrollHistory } from "./scrollHistory.ts";
 import "./tokens.css";
 import "./styles.css";
+import "./keys.css";
 
 // - A tab left open across a rebuild asks for old chunks; reload once.
 window.addEventListener("vite:preloadError", () => window.location.reload());
@@ -71,9 +74,19 @@ function useModifierClass() {
   }, []);
 }
 
+/** Keys that work on every page: ? for the key list, g i for the inbox. */
+function useEverywhereKeys() {
+  useKeyDispatcher();
+  useKeys("everywhere", {
+    help: toggleKeyHelp,
+    goInbox: () => { window.location.hash = "#/"; },
+  });
+}
+
 function App() {
   useModifierClass();
   useScrollHistory();
+  useEverywhereKeys();
   const route = useHashRoute();
   const hash = useHash();
   useEffect(() => {
@@ -87,6 +100,7 @@ function App() {
             goTo={(view) => { window.location.hash = hashFor(route, view); }} />
         </main>
       ) : <InboxPage />}
+      <KeyHelp />
     </div>
   );
 }

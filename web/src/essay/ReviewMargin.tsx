@@ -1,10 +1,11 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from "react";
 
 import { api, type ReviewEvent, type WalkthroughData } from "../api.ts";
 import { Markdown } from "../components/basics.tsx";
 import { StillFuzzyArea, useStillFuzzy } from "../components/ExplainChat.tsx";
 import { Icon } from "../components/Icon.tsx";
 import { Working } from "../components/Working.tsx";
+import { comboOf, focusQuietly, useWidgetKeys } from "../keys.ts";
 import { allReviewComments, confirmedProblems, summaryWithOutdated, type ConfirmedProblem } from "../pages/FinishPanel.tsx";
 import type { PlacedComment } from "../placeComments.ts";
 import { noteRowId } from "./CodeFigure.tsx";
@@ -21,14 +22,41 @@ export function footnoteRefId(stepIndex: number, number: number): string {
   return `fnref-${stepIndex}-${number}`;
 }
 
-type NoteProps = { session: ReviewSession; file: string; footnote: Footnote; isHovered: boolean; onHover: (number: number | null) => void };
+function sidenoteId(stepIndex: number, number: number): string {
+  return `sidenote-${stepIndex}-${number}`;
+}
+
+function inlineNoteId(stepIndex: number, number: number): string {
+  return `inline-note-${stepIndex}-${number}`;
+}
+
+function isShown(element: Element | null): element is HTMLElement {
+  return element instanceof HTMLElement && element.getClientRects().length > 0;
+}
+
+/** The note in the margin, or under the paragraph on narrow screens. */
+function shownNote(stepIndex: number, number: number): HTMLElement | null {
+  const marginNote = document.getElementById(sidenoteId(stepIndex, number));
+  return isShown(marginNote) ? marginNote : document.getElementById(inlineNoteId(stepIndex, number));
+}
+
+export function focusNote(stepIndex: number, number: number): void {
+  const note = shownNote(stepIndex, number);
+  if (focusQuietly(note)) note?.scrollIntoView({ block: "nearest" });
+}
+
+function isFocusLeaving(event: FocusEvent<HTMLElement>): boolean {
+  return !event.currentTarget.contains(event.relatedTarget);
+}
+
+type NoteProps = { session: ReviewSession; id: string; file: string; footnote: Footnote; isHovered: boolean; onHover: (number: number | null) => void };
 
 function alreadySaid(footnote: Footnote): string {
   const { note } = footnote;
   return [note.oneLiner, note.explanation, note.jsExample && `In JS: ${note.jsExample}`].filter(Boolean).join("\n\n");
 }
 
-function Sidenote({ session, file, footnote, isHovered, onHover }: NoteProps) {
+function Sidenote({ session, id, file, footnote, isHovered, onHover }: NoteProps) {
   const { note } = footnote;
   const [isOpen, setIsOpen] = useState(false);
   const chatKey = noteChatKey(file, footnote);
@@ -42,8 +70,17 @@ function Sidenote({ session, file, footnote, isHovered, onHover }: NoteProps) {
     onMarkFuzzy: () => session.saveConcept(note, "fuzzy"),
   });
   const isLearned = concept?.status === "learned";
+  const showLines = () => onHover(footnote.number);
+  const hideLines = (event: FocusEvent<HTMLElement>) => {
+    if (isFocusLeaving(event)) onHover(null);
+  };
+  // - Keyboard focus in the card keeps its lines lit.
+  const hideLinesOnPointerLeave = (event: MouseEvent<HTMLElement>) => {
+    if (!event.currentTarget.contains(document.activeElement)) onHover(null);
+  };
   return (
-    <div className={`sidenote-card ${isHovered ? "is-hovered" : ""} ${isLearned ? "is-learned" : ""}`} onMouseEnter={() => onHover(footnote.number)} onMouseLeave={() => onHover(null)}>
+    <div id={id} tabIndex={-1} className={`sidenote-card ${isHovered ? "is-hovered" : ""} ${isLearned ? "is-learned" : ""}`}
+      onMouseEnter={showLines} onMouseLeave={hideLinesOnPointerLeave} onFocus={showLines} onBlur={hideLines}>
       <div className="sidenote-head"><span className="sidenote-number">{footnote.number}</span><strong>{note.title}</strong></div>
       <p className="sidenote-body">{note.oneLiner || note.explanation}</p>
       {isOpen ? (
@@ -56,7 +93,7 @@ function Sidenote({ session, file, footnote, isHovered, onHover }: NoteProps) {
       <div className="sidenote-actions">
         {isLearned ? <span className="small-caps accent-text">You know this</span> : <button className="btn btn-ghost btn-small" onClick={() => session.saveConcept(note, "learned")}>Got it</button>}
         <button className="btn btn-ghost btn-small" onClick={fuzzy.markFuzzy}>Still fuzzy</button>
-        <button className="btn btn-ghost btn-small btn-quiet" onClick={() => setIsOpen(!isOpen)}>{isOpen ? "Less" : "More"}</button>
+        <button className="btn btn-ghost btn-small btn-quiet" aria-expanded={isOpen} onClick={() => setIsOpen(!isOpen)}>{isOpen ? "Less" : "More"}</button>
       </div>
       <StillFuzzyArea fuzzy={fuzzy} chat={chat} isFuzzy={concept?.status === "fuzzy"} />
     </div>
@@ -107,7 +144,7 @@ export function Sidenotes({ session, step, hoveredNote, onHoverNote }: { session
     <div className="sidenote-layer" ref={layer} style={{ minHeight: height }}>
       {notes.map((placed, noteIndex) => (
         <div key={`${placed.file}:${placed.footnote.number}`} className="sidenote" style={{ top: tops[noteIndex] ?? 0 }}>
-          <Sidenote session={session} file={placed.file} footnote={placed.footnote} isHovered={hoveredNote === placed.footnote.number} onHover={onHoverNote} />
+          <Sidenote session={session} id={sidenoteId(step.index, placed.footnote.number)} file={placed.file} footnote={placed.footnote} isHovered={hoveredNote === placed.footnote.number} onHover={onHoverNote} />
         </div>
       ))}
     </div>
@@ -115,14 +152,14 @@ export function Sidenotes({ session, step, hoveredNote, onHoverNote }: { session
 }
 
 /** The same notes, under their paragraph, for screens too narrow for a margin. */
-export function InlineNotes({ session, file, footnotes, hoveredNote, onHoverNote }: {
-  session: ReviewSession; file: string; footnotes: Footnote[]; hoveredNote: number | null; onHoverNote: (number: number | null) => void;
+export function InlineNotes({ session, stepIndex, file, footnotes, hoveredNote, onHoverNote }: {
+  session: ReviewSession; stepIndex: number; file: string; footnotes: Footnote[]; hoveredNote: number | null; onHoverNote: (number: number | null) => void;
 }) {
   if (footnotes.length === 0) return null;
   return (
     <div className="inline-notes">
       {footnotes.map((footnote) => (
-        <Sidenote key={footnote.number} session={session} file={file} footnote={footnote} isHovered={hoveredNote === footnote.number} onHover={onHoverNote} />
+        <Sidenote key={footnote.number} session={session} id={inlineNoteId(stepIndex, footnote.number)} file={file} footnote={footnote} isHovered={hoveredNote === footnote.number} onHover={onHoverNote} />
       ))}
     </div>
   );
@@ -202,6 +239,7 @@ function useSubmit(session: ReviewSession, data: WalkthroughData) {
   const [isPosting, setIsPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submit = async () => {
+    if (isPosting) return;
     const event = session.state.verdict ?? "COMMENT";
     const comments = allReviewComments(confirmedProblems(data.walkthrough, session.state), session.lineComments);
     if (!window.confirm(`Post your review to GitHub? ${VERDICTS.find((verdict) => verdict.event === event)?.label} with ${comments.length} comment${comments.length === 1 ? "" : "s"}.`)) return;
@@ -239,17 +277,29 @@ function DraftHeader({ count, canPost, fold }: { count: number; canPost: boolean
   return (
     <div className="small muted">
       <DraftCount count={count} canPost={canPost} />
-      {fold.isFoldable ? <> · <button className="text-link" onClick={fold.toggle}>{fold.isOpen ? "hide" : "show"}</button></> : null}
+      {fold.isFoldable ? <> · <button className="text-link" aria-expanded={fold.isOpen} onClick={fold.toggle}>{fold.isOpen ? "hide" : "show"}</button></> : null}
     </div>
   );
 }
 
 type YourReviewProps = { session: ReviewSession; data: WalkthroughData; canPost: boolean; isDocked?: boolean };
 
+/** Mod+Enter anywhere in the box submits; submit still asks first. */
+function submitOnModEnter(posting: ReturnType<typeof useSubmit>, canPost: boolean) {
+  return (event: KeyboardEvent) => {
+    const isSubmitKey = comboOf(event.nativeEvent) === "Mod+Enter";
+    if (isSubmitKey && canPost) {
+      event.preventDefault();
+      void posting.submit();
+    }
+  };
+}
+
 /** Your drafts so far, the verdict, and one button to post them all. */
 export function YourReview({ session, data, canPost, isDocked = true }: YourReviewProps) {
   const drafts = draftsOf(session, data);
   const posting = useSubmit(session, data);
+  useWidgetKeys("yourReview", canPost);
   const verdict = session.state.verdict ?? "COMMENT";
   const isSticky = isDocked && drafts.length > 0;
   const [isOpen, setIsOpen] = useState(false);
@@ -257,7 +307,7 @@ export function YourReview({ session, data, canPost, isDocked = true }: YourRevi
   const fold = { isFoldable: isSticky, isOpen, toggle: () => setIsOpen(!isOpen) };
   const showsBody = isOpen || !isSticky;
   return (
-    <div className={`your-review ${isSticky ? "is-sticky" : ""}`} id="your-review">
+    <div className={`your-review ${isSticky ? "is-sticky" : ""}`} id="your-review" onKeyDown={submitOnModEnter(posting, canPost)}>
       <div>
         <div className="your-review-title">{canPost ? "Your review" : "Your notes"}</div>
         <DraftHeader count={drafts.length} canPost={canPost} fold={fold} />
@@ -274,7 +324,7 @@ export function YourReview({ session, data, canPost, isDocked = true }: YourRevi
               </label>
             ))}
           </div>
-          <button className="btn btn-primary btn-block" disabled={posting.isPosting} onClick={() => void posting.submit()}>
+          <button className="btn btn-primary btn-block" aria-disabled={posting.isPosting} onClick={() => void posting.submit()}>
             <Icon name="github" /> {posting.isPosting ? "Posting…" : "Submit review"}
           </button>
           {posting.error ? <div className="composer-error">Not posted: {posting.error}. Your drafts are saved.</div> : null}

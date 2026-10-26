@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Inbox, InboxRow } from "../web/src/api.ts";
-import { isReadyToRead, matchesQuery, matchesShow, rowsOfSection, timeAgo } from "../web/src/inboxView.ts";
+import { isReadyToRead, matchesQuery, matchesShow, nextShow, rowsOfSection, timeAgo } from "../web/src/inboxView.ts";
 
 function row(overrides: Partial<InboxRow>): InboxRow {
   return {
@@ -38,6 +38,14 @@ describe("inbox rows", () => {
     } as Inbox;
     expect(rowsOfSection(inbox, "review").map((pr) => pr.key)).toEqual(["r"]);
     expect(rowsOfSection(inbox, "draft").map((pr) => pr.key)).toEqual(["d"]);
+  });
+});
+
+describe("nextShow", () => {
+  it("goes all, then ready, then not prepared, then back to all", () => {
+    expect(nextShow("all")).toBe("ready");
+    expect(nextShow("ready")).toBe("unprepared");
+    expect(nextShow("unprepared")).toBe("all");
   });
 });
 

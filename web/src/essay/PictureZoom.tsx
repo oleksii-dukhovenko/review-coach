@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 import { api, type DiffFile, type DiffLine, type FileView, type PictureNode, type PrRoute, type WalkthroughData } from "../api.ts";
 import { Icon } from "../components/Icon.tsx";
 import { languageForFile, renderCodeLine } from "../components/highlight.ts";
 import { Mermaid, type ClickedNode, type NodeChange } from "../components/Mermaid.tsx";
+import { useLayer } from "../keys.ts";
 import { CodeFigure } from "./CodeFigure.tsx";
 import type { Figure } from "./model.ts";
 import type { ReviewSession } from "./session.ts";
@@ -18,6 +19,8 @@ type Picture = WalkthroughData["walkthrough"]["picture"];
 export type NodeLookup = { nodes: PictureNode[]; isLoading: boolean; error: string | null };
 
 type Zoom = { clicked: ClickedNode; from: DOMRect };
+
+type DivRef = RefObject<HTMLDivElement | null>;
 
 function motionMs(): number {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : ZOOM_MS;
@@ -86,14 +89,6 @@ function useScrollLock(isLocked: boolean) {
       document.body.style.overflow = previous;
     };
   }, [isLocked]);
-}
-
-function useEscape(onEscape: () => void) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && onEscape();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onEscape]);
 }
 
 const CHANGE_LABEL: Record<NodeChange, string> = { added: "Added by this PR", changed: "Changed by this PR", existing: "Existing code" };
@@ -171,19 +166,21 @@ function ZoomBody({ zoom, lookup, session, data, onChangeKnown }: BodyProps) {
 
 type PanelProps = { zoom: Zoom; lookup: NodeLookup; session: ReviewSession; data: WalkthroughData; onClose: () => void; onGoTo: (node: PictureNode) => void };
 
-function ZoomHeader({ zoom, lookup, change, onClose, onGoTo }: Pick<PanelProps, "zoom" | "lookup" | "onClose" | "onGoTo"> & { change: NodeChange }) {
+type HeaderProps = Pick<PanelProps, "zoom" | "lookup" | "onClose" | "onGoTo"> & { change: NodeChange; titleId: string };
+
+function ZoomHeader({ zoom, lookup, change, titleId, onClose, onGoTo }: HeaderProps) {
   const node = lookup.nodes.find((candidate) => candidate.id === zoom.clicked.id);
   const where = node?.file ? `${node.file}:${node.startLine}–${node.endLine}` : "";
   return (
     <header className="zoom-header">
       <div>
         <div className={`small-caps zoom-kind is-${change}`}>Inside · {CHANGE_LABEL[change]}</div>
-        <h2 className="zoom-title">{zoom.clicked.label}</h2>
+        <h2 className="zoom-title" id={titleId}>{zoom.clicked.label}</h2>
         {where ? <div className="mono small muted">{where}</div> : null}
       </div>
       <div className="zoom-actions">
         {node?.file ? <button className="btn btn-secondary btn-small" onClick={() => onGoTo(node)}>Find it in the walkthrough</button> : null}
-        <button className="btn btn-primary btn-small" onClick={onClose}><Icon name="x" size={14} /> Zoom out</button>
+        <button className="btn btn-primary btn-small zoom-out" onClick={onClose}><Icon name="x" size={14} /> Zoom out</button>
       </div>
     </header>
   );
@@ -194,14 +191,15 @@ function ZoomPanel(props: PanelProps) {
   const panel = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const [change, setChange] = useState<NodeChange>(props.zoom.clicked.change);
+  const titleId = useId();
   useLayoutEffect(() => {
     growPanel(panel.current!, props.zoom.from, true);
     fade(content.current!, true, 0.55);
   }, []);
   return (
-    <div className="zoom-panel" ref={panel} data-change={props.zoom.clicked.change} role="dialog" aria-label={props.zoom.clicked.label}>
+    <div className="zoom-panel" ref={panel} data-change={props.zoom.clicked.change} role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div className="zoom-content" ref={content}>
-        <ZoomHeader zoom={props.zoom} lookup={props.lookup} change={change} onClose={props.onClose} onGoTo={props.onGoTo} />
+        <ZoomHeader zoom={props.zoom} lookup={props.lookup} change={change} titleId={titleId} onClose={props.onClose} onGoTo={props.onGoTo} />
         <ZoomBody zoom={props.zoom} lookup={props.lookup} session={props.session} data={props.data} onChangeKnown={setChange} />
       </div>
     </div>
@@ -239,6 +237,10 @@ function stopCamera(camera: HTMLElement) {
   camera.getAnimations().forEach((animation) => animation.cancel());
 }
 
+function zoomOutButtonIn(layer: HTMLElement | null): HTMLElement | null {
+  return layer?.querySelector<HTMLElement>(".zoom-out") ?? null;
+}
+
 /** Dives the camera toward the clicked shape. */
 function startZoom(camera: HTMLElement, clicked: ClickedNode): Zoom {
   const from = clicked.element.getBoundingClientRect();
@@ -246,13 +248,34 @@ function startZoom(camera: HTMLElement, clicked: ClickedNode): Zoom {
   return { clicked, from };
 }
 
-function ZoomLayer({ layer, ...panel }: PanelProps & { layer: RefObject<HTMLDivElement | null> }) {
+function ZoomLayer({ layer, ...panel }: PanelProps & { layer: DivRef }) {
   return (
     <div className="zoom-layer" ref={layer}>
       <Backdrop onClick={panel.onClose} />
       <ZoomPanel {...panel} />
     </div>
   );
+}
+
+/**
+ * Opens the zoom on a shape, and plays the zoom-out once on close.
+ * - A second close during the zoom-out does nothing.
+ */
+function useZoomState(camera: DivRef, layer: DivRef) {
+  const isClosing = useRef(false);
+  const [zoom, setZoom] = useState<Zoom | null>(null);
+  const open = useCallback((clicked: ClickedNode) => {
+    isClosing.current = false;
+    setZoom(startZoom(camera.current!, clicked));
+  }, []);
+  const close = useCallback(async () => {
+    if (!zoom || !layer.current || isClosing.current) return;
+    isClosing.current = true;
+    await zoomOut(layer.current, camera.current!, zoom);
+    stopCamera(camera.current!);
+    setZoom(null);
+  }, [zoom]);
+  return { zoom, setZoom, open, close };
 }
 
 /**
@@ -263,16 +286,9 @@ function ZoomLayer({ layer, ...panel }: PanelProps & { layer: RefObject<HTMLDivE
 export function useCodeZoom(session: ReviewSession, data: WalkthroughData, lookup: NodeLookup) {
   const camera = useRef<HTMLDivElement>(null);
   const layer = useRef<HTMLDivElement>(null);
-  const [zoom, setZoom] = useState<Zoom | null>(null);
+  const { zoom, setZoom, open, close } = useZoomState(camera, layer);
   useScrollLock(zoom !== null);
-  const open = useCallback((clicked: ClickedNode) => setZoom(startZoom(camera.current!, clicked)), []);
-  const close = useCallback(async () => {
-    if (!zoom || !layer.current) return;
-    await zoomOut(layer.current, camera.current!, zoom);
-    stopCamera(camera.current!);
-    setZoom(null);
-  }, [zoom]);
-  useEscape(() => void close());
+  useLayer(layer, { isOpen: zoom !== null, onClose: () => void close(), initialFocus: () => zoomOutButtonIn(layer.current), scope: "zoom" });
   const goTo = (node: PictureNode) => {
     stopCamera(camera.current!);
     setZoom(null);
@@ -295,7 +311,7 @@ export function ZoomablePicture({ session, data }: { session: ReviewSession; dat
   return (
     <section id="picture">
       <h2><Icon name="map" /> The big picture</h2>
-      <div className="small muted">{picture.caption} · <Icon name="magnifyPlus" size={14} /> Click a box to look inside.</div>
+      <div className="small muted">{picture.caption} · <Icon name="magnifyPlus" size={14} /> Click a box, or Tab to it and press Enter, to look inside.</div>
       <div className="picture-stage"><div className="picture-camera" ref={zoom.camera}><Mermaid source={picture.diagram} onNodeClick={open} /></div></div>
       <DiagramLegend />
       {zoom.panel}

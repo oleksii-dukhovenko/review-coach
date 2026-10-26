@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { askQuestion, type PrRoute } from "../api.ts";
 import type { LineSpan } from "../../../server/anchors.ts";
@@ -79,11 +79,14 @@ export function useExplainChat(subject: ExplainSubject, chat: ExplainChatState |
 
 function FollowUpInput({ isBusy, onSend }: { isBusy: boolean; onSend: (asked: string) => void }) {
   const [draft, setDraft] = useState("");
+  const box = useRef<HTMLTextAreaElement>(null);
+  // - Keeps focus in the box after Send.
   const send = () => {
     const asked = draft.trim();
     if (!asked || isBusy) return;
     setDraft("");
     onSend(asked);
+    box.current?.focus();
   };
   const sendOnEnter = (event: React.KeyboardEvent) => {
     if (event.key !== "Enter" || event.shiftKey) return;
@@ -92,7 +95,7 @@ function FollowUpInput({ isBusy, onSend }: { isBusy: boolean; onSend: (asked: st
   };
   return (
     <div className="follow-up-input">
-      <textarea rows={1} placeholder="Ask a follow-up... (Enter to send, Shift+Enter for a new line)" value={draft}
+      <textarea ref={box} rows={1} placeholder="Ask a follow-up... (Enter to send, Shift+Enter for a new line)" value={draft}
         onChange={(event) => setDraft(event.target.value)} onKeyDown={sendOnEnter} />
       <button className="primary" disabled={isBusy || !draft.trim()} onClick={send}>Send</button>
     </div>
@@ -109,7 +112,7 @@ type ExplanationBoxProps = {
 
 export function ExplanationBox({ chat, isWriting, error, onFollowUp, title = "Explained simply" }: ExplanationBoxProps) {
   return (
-    <div className="explain-box">
+    <div className="explain-box" aria-live="polite" aria-busy={isWriting}>
       <div className="eyebrow"><Icon name="sparkles" size={13} /> {title} {isWriting ? <span className="chip building">Writing</span> : null}</div>
       <Markdown text={chat.explanation || "..."} />
       {(chat.followUps ?? []).map((exchange, exchangeIndex) => (

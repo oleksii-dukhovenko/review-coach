@@ -18,6 +18,14 @@ export function rowsOfSection(inbox: Inbox, key: InboxSectionKey): InboxRow[] {
   return key === "review" ? inbox.review : inbox.mine.filter((row) => row.section === key);
 }
 
+const SHOW_ORDER: readonly InboxShow[] = ["all", "ready", "unprepared"];
+
+/** The Show filter after this one: all, ready, unprepared, then all again. */
+export function nextShow(show: InboxShow): InboxShow {
+  const nextIndex = (SHOW_ORDER.indexOf(show) + 1) % SHOW_ORDER.length;
+  return SHOW_ORDER[nextIndex];
+}
+
 export function matchesShow(row: InboxRow, show: InboxShow): boolean {
   if (show === "ready") return isReadyToRead(row);
   if (show === "unprepared") return isUnprepared(row);

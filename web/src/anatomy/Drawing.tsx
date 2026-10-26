@@ -72,12 +72,14 @@ export type PartHandlers = {
   onFocus?: (part: FramePart) => void;
 };
 
-function isPickKey(key: string): boolean {
-  return key === "Enter" || key === " ";
+function isPickKey(event: KeyboardEvent<SVGGElement>): boolean {
+  const isEnterOrSpace = event.key === "Enter" || event.key === " ";
+  const hasCommandKey = event.ctrlKey || event.metaKey || event.altKey;
+  return isEnterOrSpace && !hasCommandKey;
 }
 
 function pickOnKey(event: KeyboardEvent<SVGGElement>, pick: () => void) {
-  if (isPickKey(event.key)) {
+  if (isPickKey(event)) {
     event.preventDefault();
     pick();
   }

@@ -1,0 +1,87 @@
+/* Keyboard: the key list, focus rings, and the marks that show where the keyboard is. */
+
+/* - Keys, written as small keycaps. */
+kbd {
+  display: inline-block; min-width: 1.6em; padding: 0 6px; text-align: center;
+  font: 11px/18px var(--mono); color: var(--text-muted);
+  border: 1px solid var(--border-strong); border-radius: 4px;
+}
+.key-help kbd { background: var(--surface-muted); color: var(--text); }
+
+/* - The key list: a panel over the page. */
+.key-help-layer { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 24px; }
+.key-help-backdrop { position: absolute; inset: 0; background: color-mix(in srgb, var(--color-bg) 70%, transparent); backdrop-filter: blur(3px); }
+.key-help {
+  position: relative; width: min(720px, 100%); max-height: calc(100vh - 48px); display: flex; flex-direction: column;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+}
+.key-help-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.key-help-header h2 { margin: 0; font-size: 16px; }
+.key-help-body { overflow: auto; padding: 6px 18px 18px; columns: 2 300px; column-gap: 28px; }
+.key-scope { break-inside: avoid; padding-top: 12px; }
+.key-scope h3 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.key-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.key-table th { text-align: left; font-weight: 400; white-space: nowrap; padding: 3px 12px 3px 0; vertical-align: top; }
+.key-table td { padding: 3px 0; color: var(--text); }
+.key-combo { display: inline-flex; align-items: center; gap: 2px; }
+.key-then, .key-or { margin: 0 4px; font-size: 11px; color: var(--text-muted); }
+.key-help-button { gap: 6px; }
+.key-help-button kbd { line-height: 16px; }
+
+/* - Text for screen readers only, and a link that shows when focused. */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+.skip-link { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+.skip-link:focus {
+  position: static; width: auto; height: auto; display: inline-block; margin-bottom: 8px; padding: 6px 12px;
+  background: var(--accent); color: var(--color-on-accent); border-radius: var(--radius-md);
+}
+/* - In the overview's wrapping row, the shown link takes a row of its own. */
+.lede-grid > .skip-link:focus { flex-basis: 100%; }
+
+/* - Busy buttons keep focus, so they use aria-disabled; they still look dimmed. */
+button[aria-disabled="true"] { opacity: 0.5; cursor: default; }
+.btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+
+/* - Inbox: the selected row. */
+.inbox-row.is-cursor, .inbox-row:focus-within { background: var(--surface-muted); box-shadow: inset 2px 0 0 var(--accent); }
+.inbox-row:focus-within .inbox-title { color: var(--accent); }
+.inbox-error { margin-top: 4px; font-size: 13px; color: var(--problem); overflow-wrap: anywhere; }
+.auto-prepare-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+
+/* - Code lines: where the line cursor is. */
+.fig-half:focus { outline: none; }
+.fig-half:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.fig-half:focus .fig-gutter:empty::after { content: "+"; color: var(--color-neutral-400); }
+.viewer-code tr:focus { outline: none; }
+.viewer-code tr:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.word-picker {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; padding: 6px 10px;
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); font-family: var(--sans); font-size: 13px;
+}
+.word-picker-title { color: var(--text-muted); }
+.word-picker-word { min-height: 26px; padding: 2px 8px; font-size: 12px; }
+
+/* - Focus rings on parts that had none. */
+.peek:focus { outline: none; }
+.peek:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sidenote-card:focus-within { background: var(--color-accent-100); padding: 10px; margin: -10px; border-radius: var(--radius-md); }
+.sidenote-card:focus { outline: none; }
+button.fn-mark {
+  all: unset; color: var(--color-accent-700); font-weight: 600; font-size: 0.7em; vertical-align: super; line-height: 0; cursor: pointer;
+}
+button.fn-mark:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.essay-file:focus { outline: none; }
+.essay-file:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: var(--radius-md); }
+h1[tabindex="-1"]:focus { outline: none; }
+
+/* - Pictures: the ring follows each shape and is not clipped by the stage. */
+.diagram.is-zoomable g.node:focus { outline: none; }
+.diagram.is-zoomable g.node:focus-visible rect,
+.diagram.is-zoomable g.node:focus-visible circle,
+.diagram.is-zoomable g.node:focus-visible ellipse,
+.diagram.is-zoomable g.node:focus-visible path,
+.diagram.is-zoomable g.node:focus-visible polygon { stroke: var(--accent); stroke-width: 3px; }
+.lane-step:focus-visible { outline: 2px dashed var(--color-text); outline-offset: 5px; }

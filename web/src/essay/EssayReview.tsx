@@ -2,8 +2,9 @@ import { useEffect, useMemo, type ReactNode } from "react";
 
 import type { Guide, PrPageData, PrRoute, WalkthroughData } from "../api.ts";
 import { FileViewer } from "../components/FileViewer.tsx";
+import { focusPageHeading, useKeys } from "../keys.ts";
 import { FilesPage } from "./FilesPage.tsx";
-import { LedePage } from "./LedePage.tsx";
+import { firstOpenStep, LedePage } from "./LedePage.tsx";
 import { buildSteps, type EssayStep } from "./model.ts";
 import { YourReview } from "./ReviewMargin.tsx";
 import { useReviewSession, type EssayView, type ReviewSession } from "./session.ts";
@@ -54,6 +55,26 @@ function clampView(view: EssayView, steps: EssayStep[]): EssayView {
   return view.index >= 0 && view.index < steps.length ? view : { kind: "lede" };
 }
 
+/** The g o, g s, g f and g d jumps between the review's views. */
+function useJumpKeys(steps: EssayStep[], session: ReviewSession, goTo: (view: EssayView) => void): void {
+  const goToFirstOpenStep = () => goTo({ kind: "step", index: firstOpenStep(steps, session)?.index ?? 0 });
+  useKeys("prReview", {
+    goOverview: () => goTo({ kind: "lede" }),
+    goSteps: goToFirstOpenStep,
+    goFiles: () => goTo({ kind: "files" }),
+    goFinish: () => goTo({ kind: "finish" }),
+  });
+}
+
+// - A pending jump to a line takes focus later.
+function useTopOnViewChange(shown: EssayView, session: ReviewSession): void {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    focusPageHeading();
+    session.setComposer(null);
+  }, [shown.kind, shown.kind === "step" ? shown.index : -1]);
+}
+
 /** The walkthrough as a front page and an essay per step. */
 export function EssayReview({ route, page, view, goTo, actions, banners, extra, onReload }: EssayReviewProps) {
   const data = page.walkthrough!.data as WalkthroughData;
@@ -62,10 +83,8 @@ export function EssayReview({ route, page, view, goTo, actions, banners, extra, 
   const shown = clampView(view, steps);
   const session = useReviewSession(route, page, data.files, steps, shown, goTo);
   const canPost = page.pr.kind === "review";
-  useEffect(() => {
-    window.scrollTo(0, 0);
-    session.setComposer(null);
-  }, [shown.kind, shown.kind === "step" ? shown.index : -1]);
+  useTopOnViewChange(shown, session);
+  useJumpKeys(steps, session, goTo);
   return (
     <>
       {shown.kind === "lede" ? null : <div className="pr-banners">{banners}</div>}

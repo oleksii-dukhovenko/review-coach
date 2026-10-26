@@ -1,3 +1,4 @@
+import { focusLine } from "./essay/lineCursor.ts";
 import { addHistoryStep } from "./scrollHistory.ts";
 
 const FLASH_MS = 3000;
@@ -44,13 +45,14 @@ function findLineRow(filePath: string, line: number, side: "LEFT" | "RIGHT"): HT
   return document.querySelector<HTMLElement>(selector)?.closest<HTMLElement>("tr, .fig-row") ?? null;
 }
 
-/** Scrolls to a diff line; false when it is not on the page. */
+/** Scrolls to a diff line and focuses it; false when it is not on the page. */
 export function jumpToLine(filePath: string, line: number, side: "LEFT" | "RIGHT"): boolean {
   const row = findLineRow(filePath, line, side);
   if (!row) return false;
   addHistoryStep();
   openCollapsedParents(row);
   row.scrollIntoView({ behavior: "smooth", block: "center" });
+  focusLine(filePath, line, side);
   markLanding(row);
   return true;
 }

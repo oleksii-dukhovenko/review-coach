@@ -156,6 +156,8 @@
 /* - Keyboard focus: a thick accent outline, fully opaque. */
 .anatomy-part:focus-visible { opacity: 1; }
 .anatomy-part:focus-visible .iso-edge { stroke: var(--color-accent); stroke-width: 2px; }
+/* - Clickable parts without edges glow instead. */
+.anatomy-part[data-clickable]:focus-visible { filter: drop-shadow(0 0 2px var(--color-accent)) drop-shadow(0 0 2px var(--color-accent)); }
 @media (prefers-reduced-motion: reduce) {
   .anatomy-svg path, .anatomy-svg circle, .anatomy-part, .anatomy-link, .anatomy-label, .story-step { transition: none; }
 }

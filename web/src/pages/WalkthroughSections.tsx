@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState, type KeyboardEvent } from "react";
 
 import type { DiffFile, PrRoute, RemovedSymbol, Walkthrough, WalkthroughChange } from "../api.ts";
 import { Markdown } from "../components/basics.tsx";
@@ -11,11 +11,27 @@ type FlowStep = Walkthrough["flow"][number];
 
 type OpenLine = (file: string, line: number, side: "LEFT" | "RIGHT") => void;
 
+const HIDDEN = { display: "none" } as const;
+
+/**
+ * A word with its meaning in a pop-up on hover or focus.
+ * - Escape hides the pop-up until the word is pointed at or focused again.
+ */
 export function GlossaryTerm({ entry }: { entry: Story["glossary"][number] }) {
+  const popId = useId();
+  const [isDismissed, setDismissed] = useState(false);
+  const hideOnEscape = (event: KeyboardEvent) => {
+    const canHide = event.key === "Escape" && !isDismissed;
+    if (canHide) {
+      event.preventDefault();
+      setDismissed(true);
+    }
+  };
+  const showAgain = () => setDismissed(false);
   return (
-    <span className="term" tabIndex={0}>
+    <span className="term" tabIndex={0} aria-describedby={popId} onKeyDown={hideOnEscape} onFocus={showAgain} onPointerEnter={showAgain}>
       {entry.term}
-      <span className="term-pop" role="tooltip">{entry.meaning}</span>
+      <span className="term-pop" id={popId} role="tooltip" style={isDismissed ? HIDDEN : undefined}>{entry.meaning}</span>
     </span>
   );
 }
@@ -64,18 +80,19 @@ export function ChangesBanner({ change, onOpenFile }: { change: WalkthroughChang
 
 export function FlowSection({ route, flow, files, onOpenLine }: { route: PrRoute; flow: FlowStep[]; files: DiffFile[]; onOpenLine: OpenLine }) {
   const [isOpen, setIsOpen] = useState(true);
+  const contentId = useId();
   if (flow.length === 0) return null;
   return (
     <section id="flow">
       <h2>
         <Icon name="flow" /> How it runs
-        <button className="link-button small" onClick={() => setIsOpen(!isOpen)}>{isOpen ? "Hide" : "Show"}</button>
+        <button className="link-button small" aria-expanded={isOpen} aria-controls={contentId} onClick={() => setIsOpen(!isOpen)}>{isOpen ? "Hide" : "Show"}</button>
       </h2>
       {isOpen ? (
-        <>
-          <p className="small muted">Each column is a part of the system. Follow the arrows, or press Next (or ←/→) to walk through it with the code.</p>
+        <div id={contentId}>
+          <p className="small muted">Each column is a part of the system. Follow the arrows, or press Next, or use the arrow keys on a step, to walk through it with the code.</p>
           <FlowDiagram route={route} flow={flow} files={files} onOpenLine={onOpenLine} />
-        </>
+        </div>
       ) : null}
     </section>
   );
