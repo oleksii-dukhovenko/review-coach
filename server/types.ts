@@ -25,6 +25,10 @@ export type PullRequest = {
   headSha: string;
   baseSha: string;
   baseRef: string;
+  // - Missing on PRs saved before they were fetched.
+  headRef?: string;
+  // - The repo's main branch, e.g. develop.
+  defaultBranch?: string;
   additions: number;
   deletions: number;
   // - Missing on PRs saved before it was fetched.

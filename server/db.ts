@@ -6,13 +6,17 @@ import { config } from "./config.ts";
 import type { MainJobKind } from "./jobKinds.ts";
 import type { JobStatus, PullRequest } from "./types.ts";
 
-export type JobKind = MainJobKind | "guide";
+// - "train" jobs are stored under the train's key, not a PR's.
+export type JobKind = MainJobKind | "guide" | "anatomy" | "train";
+
+// - Built from a walkthrough; they never replace the ask context.
+const FOLLOW_ON_KINDS: JobKind[] = ["guide", "anatomy", "train"];
 
 export type JobRecord = {
   prKey: string;
   kind: JobKind;
   status: JobStatus;
-  // - Head sha for walkthroughs, thread fingerprint for triage.
+  // - Head sha for walkthroughs, thread fingerprint for triage, member fingerprint for trains.
   builtFor: string | null;
   data: unknown;
   error: string | null;
@@ -115,11 +119,22 @@ export function autoUpdateSettingKey(prKey: string): string {
   return `autoUpdate:${prKey}`;
 }
 
+/** Which train a PR is in, by the train's key. */
+export function prTrainSettingKey(prKey: string): string {
+  return `prTrain:${prKey}`;
+}
+
+/** A train's members, saved so the page can show them without GitHub. */
+export function trainSettingKey(trainKey: string): string {
+  return `train:${trainKey}`;
+}
+
 export function deletePrEverywhere(prKey: string): void {
   for (const table of ["jobs", "review_states", "asks", "ask_sessions"]) {
     database.prepare(`DELETE FROM ${table} WHERE pr_key = ?`).run(prKey);
   }
-  database.prepare("DELETE FROM settings WHERE key = ?").run(autoUpdateSettingKey(prKey));
+  deleteSetting(autoUpdateSettingKey(prKey));
+  deleteSetting(prTrainSettingKey(prKey));
   database.prepare("DELETE FROM prs WHERE key = ?").run(prKey);
 }
 
@@ -172,7 +187,7 @@ export function saveFinishedJob(job: FinishedJob): void {
          data = excluded.data, error = NULL, session_id = excluded.session_id, built_at = excluded.built_at`,
     )
     .run(job.prKey, job.kind, job.builtFor, JSON.stringify(job.data), job.sessionId, new Date().toISOString());
-  const replacesAskContext = job.kind !== "guide";
+  const replacesAskContext = !FOLLOW_ON_KINDS.includes(job.kind);
   if (replacesAskContext) database.prepare("DELETE FROM ask_sessions WHERE pr_key = ?").run(job.prKey);
 }
 
@@ -228,6 +243,10 @@ export function saveSetting(key: string, value: string): void {
   database
     .prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
     .run(key, value);
+}
+
+export function deleteSetting(key: string): void {
+  database.prepare("DELETE FROM settings WHERE key = ?").run(key);
 }
 
 /** Jobs cut off by a restart go back to not started. */

@@ -1,0 +1,192 @@
+{
+  "object": "Two terminals, each with a status lamp, and the background watcher that runs on them; a lamp's colour is the line the watcher prints when it stops.",
+  "tldr": "When the background watcher stops, its log now says whether it finished its job or died with an error.",
+  "parts": [
+    {
+      "id": "watcher",
+      "kind": "clock",
+      "column": 1,
+      "row": 1,
+      "label": "background watcher",
+      "file": "terminal/services/ha-pg/entrypoint.sh",
+      "startLine": 596,
+      "endLine": 630
+    },
+    {
+      "id": "healthy-terminal",
+      "kind": "cabinet",
+      "column": 0,
+      "row": 0,
+      "label": "healthy terminal",
+      "file": "terminal/services/ha-pg/entrypoint.sh",
+      "startLine": 684,
+      "endLine": 693
+    },
+    {
+      "id": "exit-checker",
+      "kind": "probe",
+      "column": 1,
+      "row": 0,
+      "label": "exit checker",
+      "file": "terminal/services/ha-pg/bootstrap_guard.sh",
+      "startLine": 151,
+      "endLine": 164
+    },
+    {
+      "id": "broken-terminal",
+      "kind": "cabinet",
+      "column": 2,
+      "row": 0,
+      "label": "broken terminal",
+      "file": "terminal/services/ha-pg/entrypoint.sh",
+      "startLine": 684,
+      "endLine": 693
+    }
+  ],
+  "links": [
+    {
+      "from": "watcher",
+      "to": "exit-checker",
+      "kind": "wire"
+    },
+    {
+      "from": "exit-checker",
+      "to": "healthy-terminal",
+      "kind": "wire"
+    },
+    {
+      "from": "exit-checker",
+      "to": "broken-terminal",
+      "kind": "wire"
+    }
+  ],
+  "steps": [
+    {
+      "key": "before",
+      "say": "When the background watcher stops, every terminal prints the same red line, even a healthy one.",
+      "looks": [
+        {
+          "part": "watcher",
+          "shown": true,
+          "isNew": false,
+          "light": null,
+          "open": null,
+          "level": 0.15,
+          "count": null
+        },
+        {
+          "part": "healthy-terminal",
+          "shown": true,
+          "isNew": false,
+          "light": "red",
+          "open": null,
+          "level": null,
+          "count": null
+        },
+        {
+          "part": "exit-checker",
+          "shown": false,
+          "isNew": false,
+          "light": null,
+          "open": null,
+          "level": null,
+          "count": null
+        },
+        {
+          "part": "broken-terminal",
+          "shown": true,
+          "isNew": false,
+          "light": "red",
+          "open": null,
+          "level": null,
+          "count": null
+        }
+      ]
+    },
+    {
+      "key": "change",
+      "say": "The PR adds a checker: did the watcher finish its job, or did an error stop it?",
+      "looks": [
+        {
+          "part": "watcher",
+          "shown": true,
+          "isNew": false,
+          "light": null,
+          "open": null,
+          "level": 0.45,
+          "count": null
+        },
+        {
+          "part": "healthy-terminal",
+          "shown": true,
+          "isNew": false,
+          "light": "off",
+          "open": null,
+          "level": null,
+          "count": null
+        },
+        {
+          "part": "exit-checker",
+          "shown": true,
+          "isNew": true,
+          "light": null,
+          "open": null,
+          "level": null,
+          "count": null
+        },
+        {
+          "part": "broken-terminal",
+          "shown": true,
+          "isNew": false,
+          "light": "off",
+          "open": null,
+          "level": null,
+          "count": null
+        }
+      ]
+    },
+    {
+      "key": "after",
+      "say": "Finished its job: a green line. Stopped by an error: still red, so red means a real fault.",
+      "looks": [
+        {
+          "part": "watcher",
+          "shown": true,
+          "isNew": false,
+          "light": null,
+          "open": null,
+          "level": 0.75,
+          "count": null
+        },
+        {
+          "part": "healthy-terminal",
+          "shown": true,
+          "isNew": false,
+          "light": "green",
+          "open": null,
+          "level": null,
+          "count": null
+        },
+        {
+          "part": "exit-checker",
+          "shown": true,
+          "isNew": true,
+          "light": null,
+          "open": null,
+          "level": null,
+          "count": null
+        },
+        {
+          "part": "broken-terminal",
+          "shown": true,
+          "isNew": false,
+          "light": "red",
+          "open": null,
+          "level": null,
+          "count": null
+        }
+      ]
+    }
+  ],
+  "why": "Red now shows only on a real fault, so a red line is worth a look."
+}

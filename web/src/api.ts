@@ -11,6 +11,11 @@ export type { Concept, AskRecord, JobRecord, MainJobKind, ReviewCommentInput, Re
 export type { Walkthrough, Triage, Guide, HardIdea, PictureNode } from "../../server/schemas.ts";
 import type { PictureNode } from "../../server/schemas.ts";
 export type { WalkthroughData, TriageData } from "../../server/walkthrough.ts";
+export type { AnatomyData, TrainSceneData } from "../../server/sceneCheck.ts";
+export type {
+  PartKind, PartLook, Scene, SceneLink, ScenePart, StoryStep, Train, TrainGroup, TrainMember, TrainScene, TrainView,
+} from "../../server/sceneSchema.ts";
+import type { TrainView } from "../../server/sceneSchema.ts";
 export type { WalkthroughChange } from "../../server/walkthroughMerge.ts";
 export type { DiffFile, DiffHunk, DiffLine, RemovedSymbol, SymbolUse } from "../../server/types.ts";
 export type { FileView, Reference, ReferenceQuery, ReferenceSearch, Snippet } from "../../server/references.ts";
@@ -54,6 +59,10 @@ export type PrPageData = {
   walkthrough: JobRecord | null;
   triage: JobRecord | null;
   guide: JobRecord | null;
+  // - data is AnatomyData once ready.
+  anatomy: JobRecord | null;
+  // - Null when this PR is not in a train.
+  train: TrainView | null;
   outOfDate: Record<MainJobKind, boolean>;
   autoUpdate: boolean;
   reviewState: Record<string, unknown>;
@@ -94,6 +103,7 @@ export const api = {
   prepare: (route: PrRoute) => requestJson("POST", `${prUrl(route)}/prepare`),
   rebuild: (route: PrRoute) => requestJson("POST", `${prUrl(route)}/prepare?force=1`),
   prepareGuide: (route: PrRoute) => requestJson("POST", `${prUrl(route)}/prepare-guide`),
+  prepareAnatomy: (route: PrRoute) => requestJson("POST", `${prUrl(route)}/prepare-anatomy`),
   saveState: (route: PrRoute, state: unknown) => requestJson("PUT", `${prUrl(route)}/state`, state),
   // - keepalive lets the save finish while the page closes or reloads.
   saveStateWhileLeaving: (route: PrRoute, state: unknown) =>

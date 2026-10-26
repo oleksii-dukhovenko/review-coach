@@ -15,6 +15,7 @@ import { replyToThread, submitReview, type ReviewSubmission } from "./posting.ts
 import { enqueue, isPaused, resumeQueue } from "./queue.ts";
 import { findReferences, isIdentifier, readFileView, readSnippet, warmUpForPr, type ReferenceQuery } from "./references.ts";
 import { checkForUpdate, startUpdate, versionInfo } from "./selfUpdate.ts";
+import { trainViewFor } from "./trainAnatomy.ts";
 import { prKeyOf, type PullRequest } from "./types.ts";
 
 function mainJobs(pr: PullRequest) {
@@ -117,6 +118,8 @@ export function buildRoutes(): Hono {
       walkthrough: getJob(pr.key, "walkthrough") ?? null,
       triage: getJob(pr.key, "triage") ?? null,
       guide: getJob(pr.key, "guide") ?? null,
+      anatomy: getJob(pr.key, "anatomy") ?? null,
+      train: trainViewFor(pr),
       outOfDate: { walkthrough: isKindOutOfDate(pr, "walkthrough"), triage: isKindOutOfDate(pr, "triage") },
       autoUpdate: isAutoUpdateOn(pr.key),
       reviewState: getReviewState(pr.key), asks: listAsks(pr.key), concepts: listConcepts(),
@@ -140,6 +143,11 @@ export function buildRoutes(): Hono {
 
   api.post(`${prPath}/prepare-guide`, (context) => {
     enqueue({ prKey: requirePr(context).key, kind: "guide" });
+    return context.json({ ok: true });
+  });
+
+  api.post(`${prPath}/prepare-anatomy`, (context) => {
+    enqueue({ prKey: requirePr(context).key, kind: "anatomy", isFullRebuild: true });
     return context.json({ ok: true });
   });
 

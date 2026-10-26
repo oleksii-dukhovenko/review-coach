@@ -6,14 +6,13 @@ import { ensureCheckout } from "./checkout.ts";
 import { runClaudeJson } from "./claude.ts";
 import { getJob, getPr, saveJobData } from "./db.ts";
 import { pictureMapPrompt } from "./prompts.ts";
+import { checkedCodeLink } from "./sceneCheck.ts";
 import { pictureMapJsonSchema, pictureMapSchema, type PictureNode } from "./schemas.ts";
 import type { WalkthroughData } from "./walkthrough.ts";
 
-const MAX_NODE_LINES = 160;
-
 const pending = new Map<string, Promise<PictureNode[]>>();
 
-function lineCountOf(worktree: string, file: string): number {
+export function lineCountOf(worktree: string, file: string): number {
   const fullPath = path.resolve(worktree, file);
   const isInside = fullPath.startsWith(`${path.resolve(worktree)}${path.sep}`);
   if (!isInside || !fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) return 0;
@@ -22,10 +21,7 @@ function lineCountOf(worktree: string, file: string): number {
 
 /** Drops paths that do not exist and keeps line ranges inside the file. */
 export function checkedNode(node: PictureNode, lineCount: number): PictureNode {
-  if (!node.file || lineCount === 0) return { ...node, file: "", startLine: 0, endLine: 0 };
-  const startLine = Math.min(Math.max(1, node.startLine), lineCount);
-  const endLine = Math.min(Math.max(startLine, node.endLine), lineCount, startLine + MAX_NODE_LINES - 1);
-  return { ...node, startLine, endLine };
+  return checkedCodeLink(node, lineCount);
 }
 
 function walkthroughData(prKey: string): WalkthroughData {

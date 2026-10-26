@@ -1,0 +1,212 @@
+/* Anatomy drawings in review-coach's palette, and the story and train cards around them. */
+
+/* - The kit's tokens, mapped onto web/src/tokens.css. Light first. */
+.anatomy.iso {
+  --anatomy-page: var(--color-bg);
+  --anatomy-card: var(--color-card);
+  --anatomy-text: var(--color-text-muted);
+  --anatomy-strong: var(--color-text);
+  --anatomy-muted: var(--color-text-muted);
+  --anatomy-paper: var(--color-card);
+  --anatomy-face: #ffffff;
+  --anatomy-top: #ffffff;
+  --anatomy-shade-0: #d6dbe2;
+  --anatomy-shade-1: #e0e4ea;
+  --anatomy-shade-2: #e9ecf0;
+  --anatomy-shade-3: #f2f4f6;
+  --anatomy-lit-top: #ffffff;
+  --anatomy-lit-shade: #eef0f3;
+  --anatomy-hi: var(--color-neutral-900);
+  --anatomy-mid: var(--color-neutral-600);
+  --anatomy-lo: var(--color-neutral-400);
+  --anatomy-faint: var(--color-neutral-300);
+  --anatomy-lit: var(--color-text);
+  --anatomy-halo: #5b6675;
+  --anatomy-halo-opacity: 0.32;
+  --anatomy-dot: var(--color-neutral-800);
+  --anatomy-red: var(--color-red-600);
+  --anatomy-green: var(--color-green-600);
+  --anatomy-blue: var(--color-accent-600);
+  --anatomy-cavity: #3a4049;
+  --anatomy-dial: #ffffff;
+  --anatomy-weight: 0.7px;
+  --ink-new: var(--color-amber-500);
+}
+
+:root[data-theme="dark"] .anatomy.iso {
+  --anatomy-face: #20252d;
+  --anatomy-top: #232932;
+  --anatomy-shade-0: #12151a;
+  --anatomy-shade-1: #15191e;
+  --anatomy-shade-2: #191d23;
+  --anatomy-shade-3: #1d2229;
+  --anatomy-lit-top: #2a313b;
+  --anatomy-lit-shade: #222831;
+  --anatomy-hi: var(--color-neutral-700);
+  --anatomy-mid: var(--color-neutral-400);
+  --anatomy-lo: var(--color-neutral-200);
+  --anatomy-faint: #2c323b;
+  --anatomy-halo: #000000;
+  --anatomy-halo-opacity: 0.6;
+  --anatomy-dot: var(--color-neutral-800);
+  --anatomy-cavity: #0b0d10;
+  --anatomy-dial: #3a4250;
+  --ink-new: var(--color-amber-600);
+}
+
+/* - Inks: a part or piece painted in one colour. More ink on the sides that face away. */
+.anatomy [data-ink="new"] { --ink: var(--ink-new); }
+.anatomy [data-ink="green"] { --ink: var(--anatomy-green); }
+.anatomy [data-ink="red"] { --ink: var(--anatomy-red); }
+.anatomy [data-ink="off"] { --ink: var(--color-neutral-500); }
+
+.anatomy [data-ink]:not([data-ink="ghost"]) {
+  --anatomy-paper: color-mix(in srgb, var(--ink) 12%, var(--color-card));
+  --anatomy-face: color-mix(in srgb, var(--ink) 24%, var(--color-card));
+  --anatomy-top: color-mix(in srgb, var(--ink) 24%, var(--color-card));
+  --anatomy-shade-3: color-mix(in srgb, var(--ink) 34%, var(--color-card));
+  --anatomy-shade-2: color-mix(in srgb, var(--ink) 42%, var(--color-card));
+  --anatomy-shade-1: color-mix(in srgb, var(--ink) 50%, var(--color-card));
+  --anatomy-shade-0: color-mix(in srgb, var(--ink) 58%, var(--color-card));
+  --anatomy-lit-top: color-mix(in srgb, var(--ink) 40%, var(--color-card));
+  --anatomy-lit-shade: color-mix(in srgb, var(--ink) 60%, var(--color-card));
+  --anatomy-hi: color-mix(in srgb, var(--ink) 55%, var(--color-text));
+  --anatomy-mid: color-mix(in srgb, var(--ink) 85%, var(--color-text));
+  --anatomy-lo: color-mix(in srgb, var(--ink) 70%, var(--color-card));
+  --anatomy-faint: color-mix(in srgb, var(--ink) 42%, var(--color-card));
+  --anatomy-lit: color-mix(in srgb, var(--ink) 50%, var(--color-text));
+  --anatomy-dot: color-mix(in srgb, var(--ink) 60%, var(--color-text));
+  --anatomy-dial: color-mix(in srgb, var(--ink) 10%, var(--color-card));
+}
+
+:root[data-theme="dark"] .anatomy [data-ink]:not([data-ink="ghost"]) {
+  --anatomy-paper: color-mix(in srgb, var(--ink) 16%, var(--color-card));
+  --anatomy-face: color-mix(in srgb, var(--ink) 46%, var(--color-card));
+  --anatomy-top: color-mix(in srgb, var(--ink) 46%, var(--color-card));
+  --anatomy-shade-3: color-mix(in srgb, var(--ink) 38%, var(--color-card));
+  --anatomy-shade-2: color-mix(in srgb, var(--ink) 32%, var(--color-card));
+  --anatomy-shade-1: color-mix(in srgb, var(--ink) 26%, var(--color-card));
+  --anatomy-shade-0: color-mix(in srgb, var(--ink) 20%, var(--color-card));
+  --anatomy-lit-top: color-mix(in srgb, var(--ink) 62%, var(--color-card));
+  --anatomy-lit-shade: color-mix(in srgb, var(--ink) 44%, var(--color-card));
+  --anatomy-hi: color-mix(in srgb, var(--ink) 55%, var(--color-text));
+  --anatomy-mid: var(--ink);
+  --anatomy-lo: color-mix(in srgb, var(--ink) 55%, var(--color-card));
+  --anatomy-faint: color-mix(in srgb, var(--ink) 32%, var(--color-card));
+}
+
+/* - A lamp that is off stays grey glass. */
+.anatomy .iso-solid[data-ink="off"] { --anatomy-top: var(--anatomy-face); }
+
+/* - Train parts that come later: outlines only. */
+.anatomy [data-ink="ghost"] {
+  --anatomy-face: var(--color-card);
+  --anatomy-top: var(--color-card);
+  --anatomy-shade-0: var(--color-card);
+  --anatomy-shade-1: var(--color-card);
+  --anatomy-shade-2: var(--color-card);
+  --anatomy-shade-3: var(--color-card);
+  --anatomy-cavity: var(--color-card);
+  --anatomy-dial: var(--color-card);
+  --anatomy-hi: var(--color-neutral-400);
+  --anatomy-mid: var(--color-neutral-400);
+  --anatomy-lo: var(--color-neutral-300);
+  --anatomy-faint: var(--color-neutral-200);
+  --anatomy-lit: var(--color-neutral-400);
+  --anatomy-red: var(--color-neutral-400);
+  --anatomy-green: var(--color-neutral-400);
+}
+.anatomy [data-ink="ghost"] .iso-halo, .anatomy [data-ink="ghost"] .anatomy-glow { display: none; }
+.anatomy-part[data-ink="ghost"], .anatomy-link[data-ink="ghost"] { opacity: 0.6; }
+
+/* - Drawing pieces the kit does not have. */
+.anatomy-svg { overflow: visible; }
+.anatomy .iso-halo { filter: blur(2.5px); transform: translateY(1.5px); }
+.anatomy .anatomy-base .iso-halo { filter: blur(7px); transform: translateY(4px); }
+.anatomy .iso-line[data-heavy] { stroke-width: 1.4px; }
+.anatomy-patch { stroke: var(--anatomy-lo); stroke-width: var(--anatomy-weight); stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.anatomy-patch[data-tone="mid"] { stroke: var(--anatomy-mid); }
+.anatomy-patch[data-tone="faint"] { stroke: var(--anatomy-faint); }
+.anatomy-patch[data-fill="cavity"] { fill: var(--anatomy-cavity); }
+.anatomy-patch[data-fill="face"] { fill: var(--anatomy-face); }
+.anatomy-patch[data-fill="glass"] { fill: var(--anatomy-shade-1); }
+.anatomy-patch[data-fill="side"] { fill: var(--anatomy-shade-2); }
+.anatomy-patch[data-fill="dial"] { fill: var(--anatomy-dial); }
+.anatomy-ball-body { fill: var(--anatomy-top); }
+.anatomy-ball-shine { fill: var(--anatomy-face); opacity: 0.8; }
+.anatomy-glow { filter: blur(3px); opacity: 0.5; }
+.anatomy-glow[data-ink="green"] { fill: var(--anatomy-green); }
+.anatomy-glow[data-ink="red"] { fill: var(--anatomy-red); }
+.anatomy-labels { pointer-events: none; }
+.anatomy-label {
+  fill: var(--color-text-muted); font-family: var(--font-body); font-weight: 500; letter-spacing: 0.01em;
+  paint-order: stroke; stroke: var(--anatomy-top); stroke-width: 2.4px; stroke-linejoin: round;
+}
+.anatomy-label[data-ink="new"] { fill: var(--color-amber-700); }
+.anatomy-label[data-ink="ghost"] { fill: var(--color-neutral-500); }
+
+/* - Steps change the drawing in place: colours fade, new parts slide down into place. */
+.anatomy-svg path, .anatomy-svg circle { transition: fill 0.5s ease, stroke 0.5s ease; }
+.anatomy-part, .anatomy-link, .anatomy-label { transition: opacity 0.5s var(--anatomy-ease), transform 0.5s var(--anatomy-ease); }
+.anatomy-part[data-hidden], .anatomy-link[data-hidden], .anatomy-label[data-hidden] { opacity: 0; transform: translateY(-6px); pointer-events: none; }
+.anatomy-part[data-clickable] { cursor: zoom-in; pointer-events: bounding-box; }
+.train-card .anatomy-part[data-clickable] { cursor: pointer; }
+.anatomy-part[data-clickable]:hover .iso-edge { stroke: var(--anatomy-hi); }
+.anatomy-part:focus { outline: none; }
+.anatomy-part:focus-visible .iso-edge { stroke: var(--color-accent); }
+@media (prefers-reduced-motion: reduce) {
+  .anatomy-svg path, .anatomy-svg circle, .anatomy-part, .anatomy-link, .anatomy-label { transition: none; }
+}
+
+/* - The cards. */
+.picture-stage.story-stage { margin: 0; }
+.story-card {
+  padding: 16px 20px; border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  background: var(--color-card); color: var(--color-text); min-width: 0;
+}
+.story-tldr { margin: 0 0 10px; font-size: 15px; line-height: 1.5; text-wrap: pretty; }
+.story-player { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 18px; align-items: center; }
+.story-drawing { min-width: 0; }
+.story-drawing .anatomy-svg { width: 100%; height: 190px; }
+.story-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.story-step {
+  all: unset; box-sizing: border-box; display: block; width: 100%; cursor: pointer; padding: 8px 11px 9px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-card);
+  opacity: 0.6; transition: opacity 0.3s, border-color 0.3s, background-color 0.3s;
+}
+.story-step:hover { opacity: 0.85; }
+.story-step:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.story-step[aria-pressed="true"] {
+  opacity: 1; border-color: color-mix(in srgb, var(--ink-new) 60%, transparent);
+  background: color-mix(in srgb, var(--ink-new) 7%, var(--color-card));
+}
+.story-step-key { display: block; font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-muted); }
+.story-step-say { display: block; font-size: 13.5px; line-height: 1.45; margin-top: 2px; }
+.story-bar { display: block; height: 2px; margin-top: 7px; border-radius: 2px; overflow: hidden; background: var(--color-border); }
+.story-bar > i { display: block; height: 100%; width: 0; background: var(--ink-new); }
+.story-step[aria-pressed="true"] .story-bar > i { width: 100%; }
+.story-card[data-playing] .story-step[aria-pressed="true"] .story-bar > i { animation: story-fill var(--story-step-time, 3.2s) linear both; }
+@keyframes story-fill { from { width: 0; } to { width: 100%; } }
+.story-why {
+  margin: 14px 0 0; padding: 8px 12px; font-size: 13.5px; border-left: 3px solid var(--color-green-600);
+  background: color-mix(in srgb, var(--color-green-600) 8%, var(--color-card)); border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.story-where { margin: 8px 0 0; font: 12px var(--font-mono); color: var(--color-text-muted); }
+.train-card .train-title { font-size: 15px; margin: 0 0 4px; }
+.train-prs { min-width: 0; font-size: 13.5px; }
+.train-prs h3 { font-size: 13.5px; margin: 0 0 2px; }
+.train-prs .train-status { font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-muted); }
+.train-prs .train-status[data-status="current"] { color: var(--color-amber-700); }
+.train-prs ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.train-prs li { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; }
+.train-prs li[data-current] { font-weight: 600; }
+.train-prs .train-here { font-size: 12px; }
+.train-key { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; font-size: 12px; color: var(--color-text-muted); }
+.train-key span::before {
+  content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 2px; vertical-align: -1px;
+  background: var(--swatch); border: 1px solid var(--swatch-edge, transparent);
+}
+@media (max-width: 700px) {
+  .story-player { grid-template-columns: minmax(0, 1fr); }
+  .story-drawing .anatomy-svg { height: 200px; }
+}

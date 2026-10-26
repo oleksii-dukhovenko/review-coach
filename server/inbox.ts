@@ -31,14 +31,21 @@ export function setAutoPrepareMode(mode: AutoPrepare): void {
   saveSetting("autoPrepare", mode);
 }
 
+// - Built from a ready walkthrough.
+const FOLLOW_ON_KINDS: JobKind[] = ["guide", "anatomy"];
+
+function unbuiltFollowOns(pr: PullRequest): JobKind[] {
+  if (!isWalkthroughReady(pr)) return [];
+  return FOLLOW_ON_KINDS.filter((kind) => hasNeverBeenBuilt(pr, kind));
+}
+
 /** Prepares ahead only what the "Prepare automatically" setting allows. */
 function queueFirstBuilds(prs: PullRequest[]): void {
   const mode = autoPrepareMode();
   for (const pr of prs.filter((candidate) => isBuiltAutomatically(candidate, mode))) {
     const unbuiltKinds = mainJobKinds(pr).filter((kind) => hasNeverBeenBuilt(pr, kind));
     unbuiltKinds.forEach((kind) => enqueue({ prKey: pr.key, kind }));
-    const needsGuide = isWalkthroughReady(pr) && hasNeverBeenBuilt(pr, "guide");
-    if (needsGuide) enqueue({ prKey: pr.key, kind: "guide" });
+    unbuiltFollowOns(pr).forEach((kind) => enqueue({ prKey: pr.key, kind }));
   }
 }
 

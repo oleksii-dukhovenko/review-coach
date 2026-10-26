@@ -14,7 +14,8 @@ const EASE = "cubic-bezier(0.7, 0, 0.25, 1)";
 
 type Picture = WalkthroughData["walkthrough"]["picture"];
 
-type NodeLookup = { nodes: PictureNode[]; isLoading: boolean; error: string | null };
+/** Where each clickable shape lives in the code, once known. */
+export type NodeLookup = { nodes: PictureNode[]; isLoading: boolean; error: string | null };
 
 type Zoom = { clicked: ClickedNode; from: DOMRect };
 
@@ -234,17 +235,18 @@ async function zoomOut(layer: HTMLElement, camera: HTMLElement, zoom: Zoom) {
   await moveCamera(camera, zoom.from, false).finished;
 }
 
-/** The big picture: click a box to dive into the code behind it. */
-export function ZoomablePicture({ session, data }: { session: ReviewSession; data: WalkthroughData }) {
-  const picture = data.walkthrough.picture;
-  const { lookup, findNodes } = usePictureNodes(session.route, picture);
+/**
+ * A panel that grows out of a clicked shape and shows the code behind it.
+ * - Put `camera` on the element that holds the shapes; it dives in and back out.
+ * - Render `panel` beside it.
+ */
+export function useCodeZoom(session: ReviewSession, data: WalkthroughData, lookup: NodeLookup) {
   const camera = useRef<HTMLDivElement>(null);
   const layer = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState<Zoom | null>(null);
   useScrollLock(zoom !== null);
   const open = useCallback((clicked: ClickedNode) => {
     const from = clicked.element.getBoundingClientRect();
-    findNodes();
     moveCamera(camera.current!, from, true);
     setZoom({ clicked, from });
   }, []);
@@ -260,19 +262,32 @@ export function ZoomablePicture({ session, data }: { session: ReviewSession; dat
     setZoom(null);
     session.openLine(node.file, node.startLine, "RIGHT");
   };
+  const panel = zoom ? (
+    <div className="zoom-layer" ref={layer}>
+      <Backdrop onClick={() => void close()} />
+      <ZoomPanel zoom={zoom} lookup={lookup} session={session} data={data} onClose={() => void close()} onGoTo={goTo} />
+    </div>
+  ) : null;
+  return { camera, open, panel };
+}
+
+/** The big picture: click a box to dive into the code behind it. */
+export function ZoomablePicture({ session, data }: { session: ReviewSession; data: WalkthroughData }) {
+  const picture = data.walkthrough.picture;
+  const { lookup, findNodes } = usePictureNodes(session.route, picture);
+  const zoom = useCodeZoom(session, data, lookup);
+  const open = useCallback((clicked: ClickedNode) => {
+    findNodes();
+    zoom.open(clicked);
+  }, []);
   if (!picture?.diagram.trim()) return null;
   return (
     <section id="picture">
       <h2><Icon name="map" /> The big picture</h2>
       <div className="small muted">{picture.caption} · <Icon name="magnifyPlus" size={14} /> Click a box to look inside.</div>
-      <div className="picture-stage"><div className="picture-camera" ref={camera}><Mermaid source={picture.diagram} onNodeClick={open} /></div></div>
+      <div className="picture-stage"><div className="picture-camera" ref={zoom.camera}><Mermaid source={picture.diagram} onNodeClick={open} /></div></div>
       <DiagramLegend />
-      {zoom ? (
-        <div className="zoom-layer" ref={layer}>
-          <Backdrop onClick={() => void close()} />
-          <ZoomPanel zoom={zoom} lookup={lookup} session={session} data={data} onClose={() => void close()} onGoTo={goTo} />
-        </div>
-      ) : null}
+      {zoom.panel}
     </section>
   );
 }

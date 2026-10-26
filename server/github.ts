@@ -9,9 +9,10 @@ type SearchHit = { number: number; repository: { nameWithOwner: string } };
 const PULL_REQUEST_QUERY = `
 query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
+    defaultBranchRef { name }
     pullRequest(number: $number) {
       title body url state isDraft createdAt updatedAt additions deletions
-      headRefOid baseRefOid baseRefName author { login }
+      headRefOid baseRefOid baseRefName headRefName author { login }
       reviewDecision
       reviewRequests(first: 1) { totalCount }
       reviews(first: 50) { nodes { author { login } } }
@@ -89,6 +90,7 @@ type RawPullRequest = {
   headRefOid: string;
   baseRefOid: string;
   baseRefName: string;
+  headRefName: string;
   author: { login: string } | null;
   reviewDecision: PullRequest["reviewDecision"];
   reviewRequests: { totalCount: number };
@@ -103,13 +105,19 @@ function reviewerCountOf(raw: RawPullRequest): number {
   return raw.reviewRequests.totalCount + reviewers.size;
 }
 
-async function fetchRawPullRequest(ref: PrRef): Promise<RawPullRequest> {
-  const response = await runGhJson<{ data: { repository: { pullRequest: RawPullRequest } } }>([
+type RawRepository = { defaultBranchRef: { name: string } | null; pullRequest: RawPullRequest };
+
+async function fetchRawRepository(ref: PrRef): Promise<RawRepository> {
+  const response = await runGhJson<{ data: { repository: RawRepository } }>([
     "api", "graphql",
     "-F", `owner=${ref.owner}`, "-F", `name=${ref.repo}`, "-F", `number=${ref.number}`,
     "-f", `query=${PULL_REQUEST_QUERY}`,
   ]);
-  return response.data.repository.pullRequest;
+  return response.data.repository;
+}
+
+async function fetchRawPullRequest(ref: PrRef): Promise<RawPullRequest> {
+  return (await fetchRawRepository(ref)).pullRequest;
 }
 
 function toReviewThread(raw: RawThread): ReviewThread {
@@ -140,7 +148,8 @@ function openThreadsWaitingOnMe(raw: RawPullRequest, viewerLogin: string): Revie
 }
 
 export async function fetchPullRequest(ref: PrRef, kind: PrKind): Promise<PullRequest> {
-  const raw = await fetchRawPullRequest(ref);
+  const repository = await fetchRawRepository(ref);
+  const raw = repository.pullRequest;
   const viewerLogin = await fetchViewerLogin();
   return {
     key: prKeyOf(ref.owner, ref.repo, ref.number),
@@ -154,6 +163,8 @@ export async function fetchPullRequest(ref: PrRef, kind: PrKind): Promise<PullRe
     headSha: raw.headRefOid,
     baseSha: raw.baseRefOid,
     baseRef: raw.baseRefName,
+    headRef: raw.headRefName,
+    defaultBranch: repository.defaultBranchRef?.name,
     additions: raw.additions,
     deletions: raw.deletions,
     createdAt: raw.createdAt,
@@ -218,4 +229,96 @@ export async function postThreadReply(ref: PrRef, lastCommentId: number, body: s
 export async function fetchRepoFile(owner: string, repo: string, filePath: string): Promise<string> {
   const encoded = await runGh(["api", `repos/${owner}/${repo}/contents/${filePath}`, "--jq", ".content"]);
   return Buffer.from(encoded, "base64").toString("utf8");
+}
+
+/** A PR met while following branch links. */
+export type BranchLink = {
+  number: number;
+  title: string;
+  url: string;
+  state: "OPEN" | "CLOSED" | "MERGED";
+  baseRef: string;
+  headRef: string;
+  isCrossRepository: boolean;
+  mergedAt: string | null;
+};
+
+// - below: PRs whose head is this branch.
+// - above: PRs whose base is this branch.
+// - null skips that side.
+export type LinkRequest = { below: string | null; above: string | null };
+
+export type LinkResult = { below: BranchLink[]; above: BranchLink[] };
+
+type LinkSide = keyof LinkRequest;
+
+type RawLink = Omit<BranchLink, "baseRef" | "headRef"> & { baseRefName: string; headRefName: string };
+
+const LINK_FIELDS = "nodes { number title url state baseRefName headRefName isCrossRepository mergedAt }";
+
+const LINK_LOOKUPS: Record<LinkSide, string> = {
+  below: `below: pullRequests(headRefName: $below, states: [OPEN, MERGED], first: 10) { ${LINK_FIELDS} }`,
+  above: `above: pullRequests(baseRefName: $above, states: [OPEN], first: 10) { ${LINK_FIELDS} }`,
+};
+
+function requestedSides(request: LinkRequest): LinkSide[] {
+  const sides: LinkSide[] = ["below", "above"];
+  return sides.filter((side) => request[side] !== null);
+}
+
+function linksQuery(sides: LinkSide[]): string {
+  const variables = sides.map((side) => `, $${side}: String!`).join("");
+  const lookups = sides.map((side) => LINK_LOOKUPS[side]).join("\n");
+  return `query($owner: String!, $name: String!${variables}) {
+  repository(owner: $owner, name: $name) {
+${lookups}
+  }
+}`;
+}
+
+function toBranchLinks(found: { nodes: RawLink[] } | undefined): BranchLink[] {
+  const nodes = found?.nodes ?? [];
+  return nodes.map(({ baseRefName, headRefName, ...link }) => ({ ...link, baseRef: baseRefName, headRef: headRefName }));
+}
+
+/** One GitHub call for both sides of a branch link. */
+export async function fetchBranchLinks(owner: string, repo: string, request: LinkRequest): Promise<LinkResult> {
+  const sides = requestedSides(request);
+  if (sides.length === 0) return { below: [], above: [] };
+  const branchArgs = sides.flatMap((side) => ["-f", `${side}=${request[side]}`]);
+  const response = await runGhJson<{ data: { repository: Partial<Record<LinkSide, { nodes: RawLink[] }>> } }>([
+    "api", "graphql", "-F", `owner=${owner}`, "-F", `name=${repo}`, ...branchArgs, "-f", `query=${linksQuery(sides)}`,
+  ]);
+  const repository = response.data.repository;
+  return { below: toBranchLinks(repository.below), above: toBranchLinks(repository.above) };
+}
+
+const BRANCH_FACTS_QUERY = `
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    defaultBranchRef { name }
+    pullRequest(number: $number) { baseRefName headRefName }
+  }
+}`;
+
+export type BranchFacts = { baseRef: string; headRef: string; defaultBranch: string };
+
+type RawBranchFacts = {
+  defaultBranchRef: { name: string } | null;
+  pullRequest: { baseRefName: string; headRefName: string };
+};
+
+/** A PR's base and head branch, and its repo's main branch. */
+export async function fetchBranchFacts(ref: PrRef): Promise<BranchFacts> {
+  const response = await runGhJson<{ data: { repository: RawBranchFacts } }>([
+    "api", "graphql",
+    "-F", `owner=${ref.owner}`, "-F", `name=${ref.repo}`, "-F", `number=${ref.number}`,
+    "-f", `query=${BRANCH_FACTS_QUERY}`,
+  ]);
+  const repository = response.data.repository;
+  return {
+    baseRef: repository.pullRequest.baseRefName,
+    headRef: repository.pullRequest.headRefName,
+    defaultBranch: repository.defaultBranchRef?.name ?? "",
+  };
 }

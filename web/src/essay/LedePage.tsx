@@ -1,12 +1,16 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
-import type { WalkthroughData } from "../api.ts";
+import type { Anatomy, Scene, ScenePart, TrainView } from "../../../server/sceneSchema.ts";
+import { StoryPicture } from "../anatomy/StoryPicture.tsx";
+import { TrainPicture } from "../anatomy/TrainPicture.tsx";
+import type { PictureNode, PrPageData, WalkthroughData } from "../api.ts";
 import { Markdown } from "../components/basics.tsx";
 import { Icon } from "../components/Icon.tsx";
+import type { ClickedNode } from "../components/Mermaid.tsx";
 import { Working } from "../components/Working.tsx";
 import { PrHeader, PrTabs, type PrTab } from "../pages/PrHeader.tsx";
 import { BeforeAfter, ChangesBanner, FlowSection, GlossaryTerm, RemovedCodeSection } from "../pages/WalkthroughSections.tsx";
-import { ZoomablePicture } from "./PictureZoom.tsx";
+import { useCodeZoom, ZoomablePicture } from "./PictureZoom.tsx";
 import { attentionItems, type AttentionItem, type AttentionRisk, type EssayStep } from "./model.ts";
 import type { EssayView, ReviewSession } from "./session.ts";
 import { isStepDone } from "./StepPage.tsx";
@@ -152,6 +156,58 @@ function OverviewTabs({ steps, data, goTo, session }: { steps: EssayStep[]; data
   return <PrTabs tabs={tabs} />;
 }
 
+// - An older server sends neither field.
+function readySceneOf(page: PrPageData): Scene | null {
+  const job = page.anatomy;
+  if (job?.status !== "ready") return null;
+  const scene = (job.data as Anatomy | null)?.scene ?? null;
+  return scene?.parts.length ? scene : null;
+}
+
+function trainOf(page: PrPageData): TrainView | null {
+  const view = page.train;
+  return view?.scene?.groups.length ? view : null;
+}
+
+function nodeOfPart(part: ScenePart): PictureNode {
+  return { id: part.id, file: part.file, startLine: part.startLine, endLine: part.endLine };
+}
+
+function isNewInStory(scene: Scene, partId: string): boolean {
+  return scene.steps.some((step) => step.looks.some((look) => look.part === partId && look.isNew));
+}
+
+function clickedPartOf(scene: Scene, part: ScenePart, element: Element): ClickedNode {
+  return { id: part.id, label: part.label, change: isNewInStory(scene, part.id) ? "changed" : "existing", element };
+}
+
+/** The playing story; clicking a part opens its code in the big picture's zoom panel. */
+function StoryCard({ session, data, scene }: { session: ReviewSession; data: WalkthroughData; scene: Scene }) {
+  const lookup = useMemo(() => ({ nodes: scene.parts.map(nodeOfPart), isLoading: false, error: null }), [scene]);
+  const zoom = useCodeZoom(session, data, lookup);
+  return (
+    <>
+      <div className="picture-stage story-stage">
+        <div className="picture-camera" ref={zoom.camera}>
+          <StoryPicture scene={scene} onOpenPart={(part, element) => zoom.open(clickedPartOf(scene, part, element))} />
+        </div>
+      </div>
+      {zoom.panel}
+    </>
+  );
+}
+
+function AnatomyPictures({ session, data }: { session: ReviewSession; data: WalkthroughData }) {
+  const train = trainOf(session.page);
+  const scene = readySceneOf(session.page);
+  return (
+    <>
+      {train ? <TrainPicture view={train} /> : null}
+      {scene ? <StoryCard session={session} data={data} scene={scene} /> : null}
+    </>
+  );
+}
+
 /** The front page: what this PR does, where to look hardest, and how long it takes. */
 export function LedePage({ session, data, steps, goTo, actions, banners, extra }: LedeProps) {
   return (
@@ -161,6 +217,7 @@ export function LedePage({ session, data, steps, goTo, actions, banners, extra }
       <ChangesBanner change={data.changes?.at(-1)} onOpenFile={session.openFile} />
       <div className="lede-grid">
         <div className="lede-main">
+          <AnatomyPictures session={session} data={data} />
           <section className="lede-card">
             <h2 className="lede-label">In one line</h2>
             <p className="lede-standfirst">{standfirstOf(data)}</p>
