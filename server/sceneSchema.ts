@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { JobStatus } from "./types.ts";
+
 /** Parts the drawing library can build. Keep in sync with web/src/anatomy/parts.ts. */
 export const PART_KINDS = [
   "cabinet", "light", "drawer", "card", "probe", "gauge", "lock",
@@ -107,6 +109,15 @@ export interface Train {
   repo: string;
   /** Bottom (closest to the main branch) first. */
   members: TrainMember[];
+}
+
+/** What the PR page gets about the train this PR belongs to. */
+export interface TrainView {
+  train: Train;
+  /** The PR this page is about. */
+  currentNumber: number;
+  scene: TrainScene | null;
+  status: JobStatus;
 }
 
 function toClaudeJsonSchema(schema: z.ZodType): object {
