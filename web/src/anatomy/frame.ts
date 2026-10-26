@@ -1,7 +1,7 @@
 import type { PartKind, Scene, SceneLink, ScenePart, Train, TrainGroup, TrainScene } from "../../../server/sceneSchema.ts";
 import { corners, cylinder, depthOf, extrude, iso, onTop, planOutline, ring, slabOf, topTicks, type Flat, type Plan, type Plane, type Projection } from "./kit/iso-kit.ts";
 import { bodyBox, boxAround, labelBox, placeLabels, pointsOfPiece, type Box, type LabelledPart } from "./layout.ts";
-import { buildPart, type Look } from "./parts.ts";
+import { buildPart, canBuildPart, type Look } from "./parts.ts";
 import { dots, line, solid, type Ink, type Piece } from "./pieces.ts";
 
 /** Floor size of one grid cell, in drawing units. */
@@ -13,7 +13,8 @@ const PLATE_DEPTH = 5;
 const LABEL_SHIFT = 20;
 const LINK_GAP = 15;
 const VIEW_PAD = 5;
-// - Label height as a share of the drawing's height: about 11 px at 190 px tall.
+// - Label height, as a share of drawing height.
+// - About 11 px on a 190 px drawing.
 const LABEL_SHARE = 0.06;
 
 export type CodeLink = { file: string; startLine: number; endLine: number };
@@ -29,7 +30,7 @@ export type FramePart = {
   isHidden: boolean;
   ink: Ink;
   code: CodeLink | null;
-  // - Floor point in front of the part, where its label starts.
+  // - Floor point where the part's label starts.
   labelAt: Flat;
   centre: Plane;
   depth: number;
@@ -76,11 +77,21 @@ function plateFeet(plate: Plan): Piece[] {
   ]);
 }
 
+type Inner = { x: number; y: number; w: number; d: number };
+
+function columnLine(inner: Inner, edgeX: number): string {
+  return onTop([[edgeX, inner.y], [edgeX, inner.y + inner.d]], 0, PROJECTION);
+}
+
+function rowLine(inner: Inner, edgeY: number): string {
+  return onTop([[inner.x, edgeY], [inner.x + inner.w, edgeY]], 0, PROJECTION);
+}
+
 /** Faint lines between the cells, running groove to groove. */
 function cellLines(plate: Plan): string {
-  const inner = { x: plate.x + 4, y: plate.y + 4, w: plate.w - 8, d: plate.d - 8 };
-  const columnLines = cellEdgesBetween(inner.x, inner.w, plate.x + PLATE_MARGIN).map((edgeX) => onTop([[edgeX, inner.y], [edgeX, inner.y + inner.d]], 0, PROJECTION));
-  const rowLines = cellEdgesBetween(inner.y, inner.d, plate.y + PLATE_MARGIN).map((edgeY) => onTop([[inner.x, edgeY], [inner.x + inner.w, edgeY]], 0, PROJECTION));
+  const inner: Inner = { x: plate.x + 4, y: plate.y + 4, w: plate.w - 8, d: plate.d - 8 };
+  const columnLines = cellEdgesBetween(inner.x, inner.w, plate.x + PLATE_MARGIN).map((edgeX) => columnLine(inner, edgeX));
+  const rowLines = cellEdgesBetween(inner.y, inner.d, plate.y + PLATE_MARGIN).map((edgeY) => rowLine(inner, edgeY));
   return [...columnLines, ...rowLines].join("");
 }
 
@@ -180,13 +191,31 @@ function linkInk(ends: PlacedPart[]): Ink {
   return ends.some((end) => end.ink === "new") ? "new" : "plain";
 }
 
+/** True for a link kind this build can draw. */
+export function canBuildLink(kind: string): boolean {
+  return Object.hasOwn(LINK_BUILDERS, kind);
+}
+
+type Ends = [PlacedPart, PlacedPart];
+
+/** Both placed parts a link joins, or null when one is missing. */
+function endsOf(link: SceneLink, byId: Map<string, PlacedPart>): Ends | null {
+  const from = byId.get(link.from);
+  const to = byId.get(link.to);
+  return from && to ? [from, to] : null;
+}
+
+function frameLink(link: SceneLink, ends: Ends, index: number): FrameLink {
+  const pieces = LINK_BUILDERS[link.kind](runBetween(centreOf(ends[0]), centreOf(ends[1])));
+  const isHidden = ends.some((end) => end.isHidden);
+  return { id: `${link.from}-${link.to}-${index}`, kind: link.kind, pieces, isHidden, ink: linkInk(ends) };
+}
+
 function frameLinks(links: SceneLink[], placed: PlacedPart[]): FrameLink[] {
   const byId = new Map(placed.map((part) => [part.id, part]));
   return links.flatMap((link, index) => {
-    const ends = [byId.get(link.from), byId.get(link.to)].filter((end): end is PlacedPart => Boolean(end));
-    if (ends.length < 2) return [];
-    const pieces = LINK_BUILDERS[link.kind](runBetween(centreOf(ends[0]!), centreOf(ends[1]!)));
-    return [{ id: `${link.from}-${link.to}-${index}`, kind: link.kind, pieces, isHidden: ends.some((end) => end.isHidden), ink: linkInk(ends) }];
+    const ends = endsOf(link, byId);
+    return ends ? [frameLink(link, ends, index)] : [];
   });
 }
 
@@ -196,9 +225,15 @@ function depthOfCell(cell: Pick<Cell, "column" | "row">): number {
   return depthOf([...centreOf(cell), 0], PROJECTION);
 }
 
+type GridSpot = Pick<Cell, "column" | "row">;
+
+function farFirst(first: GridSpot, second: GridSpot): number {
+  return depthOfCell(first) - depthOfCell(second) || first.row - second.row || first.column - second.column;
+}
+
 /** Far before near; equal depths keep a fixed order by row, then column. */
-export function paintOrder<T extends Pick<Cell, "column" | "row">>(cells: T[]): T[] {
-  return [...cells].sort((first, second) => depthOfCell(first) - depthOfCell(second) || first.row - second.row || first.column - second.column);
+export function paintOrder<T extends GridSpot>(cells: T[]): T[] {
+  return [...cells].sort(farFirst);
 }
 
 function framePart(part: PlacedPart): FramePart {
@@ -224,13 +259,20 @@ function boxOfBoxes(boxes: Box[]): Box {
   return boxAround(boxes.flatMap((box): Flat[] => [[box.left, box.top], [box.right, box.bottom]]));
 }
 
+/** The same part in every step. */
+function versionsOf(part: FramePart, layers: Layer[]): FramePart[] {
+  return layers.map((layer) => layer.parts.find((candidate) => candidate.id === part.id)!);
+}
+
+/** The room a part takes in any step. */
+function roomOf(part: FramePart, layers: Layer[]): Box {
+  return boxOfBoxes(versionsOf(part, layers).map((version) => bodyBox(version.pieces)));
+}
+
 /** Each part once, nearest first, with the room it takes in any step. */
 function labelledParts(layers: Layer[]): LabelledPart[] {
   const nearestFirst = [...layers[0]!.parts].reverse();
-  return nearestFirst.map((part) => {
-    const versions = layers.map((layer) => layer.parts.find((candidate) => candidate.id === part.id)!);
-    return { id: part.id, label: part.label, centre: part.centre, body: boxOfBoxes(versions.map((version) => bodyBox(version.pieces))) };
-  });
+  return nearestFirst.map((part) => ({ id: part.id, label: part.label, centre: part.centre, body: roomOf(part, layers) }));
 }
 
 function withLabelSpots(layer: Layer, spots: Map<string, Flat>): Layer {
@@ -253,7 +295,7 @@ function framesOf(cells: Cell[], steps: PlacedPart[][], links: SceneLink[]): Fra
   const layers = steps.map((placed) => layerOf(cells, placed, links));
   const drawn = boxAround(layers.flatMap(piecesOfLayer).flatMap(pointsOfPiece));
   const labelSize = (drawn.bottom - drawn.top) * LABEL_SHARE;
-  const spots = placeLabels(labelledParts(layers), labelSize, PROJECTION);
+  const spots = placeLabels(labelledParts(layers), labelSize, PROJECTION, drawn);
   const labelled = layers.map((layer) => withLabelSpots(layer, spots));
   const view = viewAround(drawn, labelled[0]!.parts.map((part) => labelBox(part.label, part.labelAt, labelSize)));
   return labelled.map((layer) => ({ ...view, labelSize, ...layer }));
@@ -280,6 +322,12 @@ function placedInStep(scene: Scene, stepIndex: number): PlacedPart[] {
 export function storyFrames(scene: Scene): Frame[] {
   const steps = scene.steps.map((_unused, stepIndex) => placedInStep(scene, stepIndex));
   return framesOf(scene.parts, steps.length ? steps : [placedInStep(scene, 0)], scene.links);
+}
+
+/** The scene without parts or links this build cannot draw. */
+export function drawableScene(scene: Scene): Scene {
+  const parts = scene.parts.filter((part) => canBuildPart(part.kind));
+  return { ...scene, parts, links: scene.links.filter((link) => canBuildLink(link.kind)) };
 }
 
 /** One step of a story. */
@@ -319,7 +367,17 @@ function placedGroup(group: TrainGroup, status: PartStatus): PlacedPart {
   return { ...group, look, isHidden: false, ink: STATUS_INK[status], code: null, prs: group.prs, status };
 }
 
-/** The whole train as one still drawing: done parts solid, this PR's part yellow, later parts faint. */
+/** The train scene without groups or links this build cannot draw. */
+export function drawableTrainScene(scene: TrainScene): TrainScene {
+  const groups = scene.groups.filter((group) => canBuildPart(group.kind));
+  return { ...scene, groups, links: scene.links.filter((link) => canBuildLink(link.kind)) };
+}
+
+/**
+ * The whole train as one still drawing.
+ * - Done parts solid, this PR's part yellow.
+ * - Later parts faint.
+ */
 export function trainFrameOf(scene: TrainScene, train: Train, currentNumber: number): Frame {
   const placed = scene.groups.map((group) => placedGroup(group, groupStatus(group, train, currentNumber)));
   return framesOf(scene.groups, [placed], scene.links)[0]!;

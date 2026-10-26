@@ -20,9 +20,10 @@ function isInProgress(status: string | undefined): boolean {
 
 const JOB_LABEL: Record<MainJobKind, string> = { walkthrough: "Walkthrough", triage: "Comment help" };
 
+// - Includes the pictures, which build after the walkthrough.
 function isBuilding(page: PrPageData | null): boolean {
-  const jobs = [page?.walkthrough, page?.triage, page?.guide];
-  return jobs.some((job) => isInProgress(job?.status));
+  const statuses = [page?.walkthrough, page?.triage, page?.guide, page?.anatomy, page?.train].map((job) => job?.status);
+  return statuses.some(isInProgress);
 }
 
 /** A finished build stays on screen while the next one runs. */
@@ -112,7 +113,7 @@ export function PrPage({ route, view, goTo }: { route: PrRoute; view: EssayView;
     if (!isBuilding(page)) return;
     const timer = setInterval(() => void load(), POLL_WHILE_BUILDING_MS);
     return () => clearInterval(timer);
-  }, [page?.walkthrough?.status, page?.triage?.status, page?.guide?.status]);
+  }, [page?.walkthrough?.status, page?.triage?.status, page?.guide?.status, page?.anatomy?.status, page?.train?.status]);
 
   const prepare = () => void api.prepare(route).then(load);
   const rebuild = () => {
@@ -132,7 +133,7 @@ export function PrPage({ route, view, goTo }: { route: PrRoute; view: EssayView;
   const walkthrough = page.jobKinds.includes("walkthrough") ? buildOf("walkthrough") : null;
   if (walkthrough) {
     return (
-      <EssayReview key={walkthrough.builtAt} route={route} page={page} view={view} goTo={goTo}
+      <EssayReview key={walkthrough.builtAt} route={route} page={page} view={view} goTo={goTo} onReload={() => void load()}
         actions={<PrActions page={page} onRebuild={rebuild} />} banners={<><ErrorBanner message={error} />{banners}</>} extra={triage} />
     );
   }

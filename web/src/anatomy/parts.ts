@@ -7,7 +7,7 @@ import {
 
 /**
  * The settings a part is drawn with in one step.
- * - `isNew` is painted by the frame, as the whole part's ink.
+ * - The frame paints `isNew` as the part's ink.
  */
 export type Look = Pick<PartLook, "light" | "open" | "level" | "count" | "isNew">;
 
@@ -279,10 +279,16 @@ function shackleProfile(isOpen: boolean): Plane[] {
 
 const LOCK_BODY: Plan = { x: -8, y: -3.6, w: 16, d: 7.2, r: 1.6 };
 
+const LOCK_SCREWS: Plane[] = [[-9.2, -6.2], [9.2, -6.2], [-9.2, 6.2], [9.2, 6.2]];
+
+function screwRings(pen: Pen, screws: Plane[], height: number): string {
+  return screws.map(([screwX, screwY]) => pen.ring(screwX, screwY, 1.1, height, 12)).join("");
+}
+
 const lock: Builder = (pen, look) => [
   haloUnder(pen, { x: -11, y: -8, w: 22, d: 16, r: 2 }),
   solid(pen.slab({ x: -11, y: -8, w: 22, d: 16, r: 1.4 }, 0, 2.4, 3, 0.4), "lo"),
-  line([[-9.2, -6.2], [9.2, -6.2], [-9.2, 6.2], [9.2, 6.2]].map(([screwX, screwY]) => pen.ring(screwX!, screwY!, 1.1, 2.4, 12)).join(""), "faint"),
+  line(screwRings(pen, LOCK_SCREWS, 2.4), "faint"),
   ...screwsAt(pen, [[-9.2, -6.2, 2.4], [9.2, -6.2, 2.4], [-9.2, 6.2, 2.4], [9.2, 6.2, 2.4]]),
   seamed(pen.slab(LOCK_BODY, 2.4, 14, 4, 0.6), "mid", [5.4, 13.6].map((height) => pen.sideSeam(LOCK_BODY, height, 4)).join("")),
   patch(faceCircle(pen, faceY(3.6), 0, 9.8, 1.3, 16), "cavity", "lo"),
@@ -352,12 +358,24 @@ function conveyorMotor(pen: Pen): Piece[] {
   return [solid(pen.slab({ x: 12, y: 7, w: 6, d: 3.6, r: 0.6 }, 3, 6, 2, 0.3), "mid"), line(vents.join(""), "lo")];
 }
 
+const CONVEYOR_LEGS: Plane[] = [[-15, -5.6], [15, -5.6], [-15, 3.6], [15, 3.6]];
+
+function conveyorLegs(pen: Pen): Piece[] {
+  return CONVEYOR_LEGS.map(([legX, legY]) => solid(pen.slab({ x: legX - 1, y: legY, w: 2, d: 2, r: 0.4 }, 0, 7.2, 2), "lo"));
+}
+
+/** Thin slats across the belt, every 2.5 units. */
+function beltSlats(pen: Pen): Piece {
+  const slatAt = (slatX: number) => pen.lineOnTop([slatX, -5], [slatX, 5], 10);
+  return line(Array.from({ length: 13 }, (_unused, index) => slatAt(-15 + index * 2.5)).join(""), "faint");
+}
+
 const conveyor: Builder = (pen, look) => [
   haloUnder(pen, { x: -18, y: -7, w: 36, d: 14, r: 2 }),
-  ...[[-15, -5.6], [15, -5.6], [-15, 3.6], [15, 3.6]].map(([legX, legY]) => solid(pen.slab({ x: legX! - 1, y: legY!, w: 2, d: 2, r: 0.4 }, 0, 7.2, 2), "lo")),
+  ...conveyorLegs(pen),
   conveyorFrame(pen, -7),
   solid(pen.slab({ x: -17, y: -5, w: 34, d: 10, r: 1 }, 8.2, 1.8, 3), "lo", "none"),
-  line(Array.from({ length: 13 }, (_unused, index) => pen.lineOnTop([-15 + index * 2.5, -5], [-15 + index * 2.5, 5], 10)).join(""), "faint"),
+  beltSlats(pen),
   ...parcels(pen, look.count ?? 0),
   conveyorFrame(pen, 5),
   ...frameTicks(pen),
@@ -368,8 +386,12 @@ const conveyor: Builder = (pen, look) => [
 
 // - Press: a stamp press over a stack of sheets.
 
+function pressSheet(pen: Pen, index: number): Piece {
+  return solid(pen.slab({ x: -4.6, y: -0.8, w: 9.2, d: 7.6, r: 0.3 }, 6.4 + index * 1.1, 0.8, 2), "hi", "none");
+}
+
 function pressSheets(pen: Pen, count: number): Piece[] {
-  return Array.from({ length: count }, (_unused, index) => solid(pen.slab({ x: -4.6, y: -0.8, w: 9.2, d: 7.6, r: 0.3 }, 6.4 + index * 1.1, 0.8, 2), "hi", "none"));
+  return Array.from({ length: count }, (_unused, index) => pressSheet(pen, index));
 }
 
 function handwheel(pen: Pen): Piece[] {
@@ -476,6 +498,11 @@ const clock: Builder = (pen, look) => [
 const BUILDERS: Record<PartKind, Builder> = {
   cabinet, light, drawer, card, probe, gauge, lock, conveyor, lever, press, bin, clock,
 };
+
+/** True for a part kind this build can draw. */
+export function canBuildPart(kind: string): boolean {
+  return Object.hasOwn(BUILDERS, kind);
+}
 
 /** The pieces of one part standing at a floor point, bottom to top. */
 export function buildPart(kind: PartKind, at: Plane, look: Look, projection: Projection): Piece[] {

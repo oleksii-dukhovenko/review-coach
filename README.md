@@ -26,6 +26,7 @@ That's it. It opens http://127.0.0.1:4477 when it's ready.
 ## What you get
 
 - **An inbox** of PRs waiting on your review, plus your own drafts and PRs with comments waiting on you.
+- **A picture that plays the PR**: a small drawing of a machine shows what happened before, what the PR adds, and what happens after. Stacked PRs also get one picture of the whole train.
 - **A front page per PR**: what it does in one line, where to spend your attention, and how long each step takes.
 - **A big picture you can zoom into**: click a box in the diagram to see the code behind it.
 - **Steps that read like an article**: plain text, code figures, and notes in the margin next to their line.

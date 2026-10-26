@@ -67,11 +67,17 @@ function shadeOf(normal: Point3, projection: Projection): number {
   return Math.min(3, Math.max(0, Math.floor(light * 4)));
 }
 
+/** One run around every edge, or none, when all edges face one way. */
+function wholeLoopRun(flags: boolean[], want: boolean): number[][] {
+  const loop = Array.from({ length: flags.length + 1 }, (_unused, index) => index % flags.length);
+  return flags[0] === want ? [loop] : [];
+}
+
 /** Indexes of each run of edges whose facing equals `want`, as vertex lists. */
 function runsOf(flags: boolean[], want: boolean): number[][] {
   const count = flags.length;
   const start = flags.findIndex((flag, index) => flag !== flags[(index + count - 1) % count]);
-  if (start < 0) return flags[0] === want ? [Array.from({ length: count + 1 }, (_unused, index) => index % count)] : [];
+  if (start < 0) return wholeLoopRun(flags, want);
   const runs: number[][] = [];
   let run: number[] | null = null;
   for (let step = 0; step < count; step++) {
@@ -112,11 +118,17 @@ const visibleSides = (prism: Prism): number[] => prism.facing.flatMap((isFacing,
 
 function sideShades(prism: Prism, projection: Projection): string[] {
   const buckets: string[][] = [[], [], [], []];
-  visibleSides(prism).forEach((index) => buckets[shadeOf(prism.normals[index]!, projection)]!.push(sideQuad(prism, index)));
+  const bucketOf = (index: number) => buckets[shadeOf(prism.normals[index]!, projection)]!;
+  visibleSides(prism).forEach((index) => bucketOf(index).push(sideQuad(prism, index)));
   return buckets.map((paths) => paths.join(""));
 }
 
-/** The silhouette: cap edges on hidden sides, far edges on visible sides, and the corners where they meet. */
+/**
+ * The silhouette of a prism.
+ * - Cap edges on hidden sides.
+ * - Far edges on visible sides.
+ * - The corners where they meet.
+ */
 function prismOutline(prism: Prism): string {
   const { near, far, facing } = prism;
   const count = facing.length;
@@ -160,6 +172,7 @@ export function penAt(origin: Plane, projection: Projection) {
   const moved = (plan: Plan): Plan => ({ ...plan, x: plan.x + originX, y: plan.y + originY });
   const floor = (pointX: number, pointY: number): Plane => [originX + pointX, originY + pointY];
   const world = ([pointX, pointY, height]: Point3): Point3 => [originX + pointX, originY + pointY, height];
+  const axisOrigin = (axis: Axis) => (axis === "y" ? originY : originX);
   return {
     projection,
     world,
@@ -179,7 +192,8 @@ export function penAt(origin: Plane, projection: Projection) {
     path: (list: Point3[], closed = false) => pathOf(list.map((at) => iso(world(at), projection)), closed),
     radialTicks: (centreX: number, centreY: number, radius: number, count: number, every: number, height: number, lengths: [number, number], from = 0, span = Math.PI * 2) =>
       radialTicks(originX + centreX, originY + centreY, radius, count, every, height, lengths, projection, from, span),
-    along: (profile: Profile, axis: Axis, from: number, to: number) => extrudeAlong(shiftProfile(profile, axis, origin), axis, from + (axis === "y" ? originY : originX), to + (axis === "y" ? originY : originX), projection),
+    along: (profile: Profile, axis: Axis, from: number, to: number) =>
+      extrudeAlong(shiftProfile(profile, axis, origin), axis, from + axisOrigin(axis), to + axisOrigin(axis), projection),
     circleOnTop: (centreX: number, centreY: number, radius: number, height: number, steps = 28) => onTop(circleRing(originX + centreX, originY + centreY, radius, steps), height, projection, true),
   };
 }

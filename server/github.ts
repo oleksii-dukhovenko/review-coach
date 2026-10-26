@@ -12,7 +12,7 @@ query($owner: String!, $name: String!, $number: Int!) {
     defaultBranchRef { name }
     pullRequest(number: $number) {
       title body url state isDraft createdAt updatedAt additions deletions
-      headRefOid baseRefOid baseRefName headRefName author { login }
+      headRefOid baseRefOid baseRefName headRefName isCrossRepository author { login }
       reviewDecision
       reviewRequests(first: 1) { totalCount }
       reviews(first: 50) { nodes { author { login } } }
@@ -91,6 +91,7 @@ type RawPullRequest = {
   baseRefOid: string;
   baseRefName: string;
   headRefName: string;
+  isCrossRepository: boolean;
   author: { login: string } | null;
   reviewDecision: PullRequest["reviewDecision"];
   reviewRequests: { totalCount: number };
@@ -165,6 +166,7 @@ export async function fetchPullRequest(ref: PrRef, kind: PrKind): Promise<PullRe
     baseRef: raw.baseRefName,
     headRef: raw.headRefName,
     defaultBranch: repository.defaultBranchRef?.name,
+    isFromFork: raw.isCrossRepository,
     additions: raw.additions,
     deletions: raw.deletions,
     createdAt: raw.createdAt,
@@ -256,9 +258,12 @@ type RawLink = Omit<BranchLink, "baseRef" | "headRef"> & { baseRefName: string; 
 
 const LINK_FIELDS = "nodes { number title url state baseRefName headRefName isCrossRepository mergedAt }";
 
+// - Newest first: busy branches still find recent PRs.
+const NEWEST_TEN = "first: 10, orderBy: { field: CREATED_AT, direction: DESC }";
+
 const LINK_LOOKUPS: Record<LinkSide, string> = {
-  below: `below: pullRequests(headRefName: $below, states: [OPEN, MERGED], first: 10) { ${LINK_FIELDS} }`,
-  above: `above: pullRequests(baseRefName: $above, states: [OPEN], first: 10) { ${LINK_FIELDS} }`,
+  below: `below: pullRequests(headRefName: $below, states: [OPEN, MERGED], ${NEWEST_TEN}) { ${LINK_FIELDS} }`,
+  above: `above: pullRequests(baseRefName: $above, states: [OPEN], ${NEWEST_TEN}) { ${LINK_FIELDS} }`,
 };
 
 function requestedSides(request: LinkRequest): LinkSide[] {
@@ -297,15 +302,15 @@ const BRANCH_FACTS_QUERY = `
 query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     defaultBranchRef { name }
-    pullRequest(number: $number) { baseRefName headRefName }
+    pullRequest(number: $number) { baseRefName headRefName isCrossRepository }
   }
 }`;
 
-export type BranchFacts = { baseRef: string; headRef: string; defaultBranch: string };
+export type BranchFacts = { baseRef: string; headRef: string; defaultBranch: string; isFromFork: boolean };
 
 type RawBranchFacts = {
   defaultBranchRef: { name: string } | null;
-  pullRequest: { baseRefName: string; headRefName: string };
+  pullRequest: { baseRefName: string; headRefName: string; isCrossRepository: boolean };
 };
 
 /** A PR's base and head branch, and its repo's main branch. */
@@ -320,5 +325,6 @@ export async function fetchBranchFacts(ref: PrRef): Promise<BranchFacts> {
     baseRef: repository.pullRequest.baseRefName,
     headRef: repository.pullRequest.headRefName,
     defaultBranch: repository.defaultBranchRef?.name ?? "",
+    isFromFork: repository.pullRequest.isCrossRepository,
   };
 }

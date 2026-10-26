@@ -10,7 +10,8 @@ const TRUNK_BRANCHES = ["develop", "main", "master"];
 /** Finds the PRs one branch link away. Tests pass a fake. */
 export type LinkLookup = (request: LinkRequest) => Promise<LinkResult>;
 
-// - from: the branch to look at next; null once this side has stopped.
+// - from: the branch to look at next.
+// - from is null once this side stops.
 type Line = { links: BranchLink[]; from: string | null };
 
 type Walk = { down: Line; up: Line; seen: Set<number>; defaultBranch: string };
@@ -41,9 +42,12 @@ function onlyOne(links: BranchLink[]): BranchLink | undefined {
   return links.length === 1 ? links[0] : undefined;
 }
 
+function byNewestMerge(left: BranchLink, right: BranchLink): number {
+  return (right.mergedAt ?? "").localeCompare(left.mergedAt ?? "");
+}
+
 function latestMerged(links: BranchLink[]): BranchLink | undefined {
-  const newestFirst = links.filter(isMerged).toSorted((left, right) => (right.mergedAt ?? "").localeCompare(left.mergedAt ?? ""));
-  return newestFirst[0];
+  return links.filter(isMerged).toSorted(byNewestMerge)[0];
 }
 
 /**
@@ -91,10 +95,15 @@ function isWalking(walk: Walk): boolean {
   return walk.down.from !== null || walk.up.from !== null;
 }
 
-function startWalk(start: TrainMember, defaultBranch: string): Walk {
+// - A fork's head branch lives in the fork.
+function firstBranchUp(start: TrainMember, defaultBranch: string, isFromFork: boolean): string | null {
+  return isFromFork ? null : walkableBranch(start.headRef, defaultBranch);
+}
+
+function startWalk(start: TrainMember, defaultBranch: string, isFromFork: boolean): Walk {
   return {
     down: { links: [], from: walkableBranch(start.baseRef, defaultBranch) },
-    up: { links: [], from: walkableBranch(start.headRef, defaultBranch) },
+    up: { links: [], from: firstBranchUp(start, defaultBranch, isFromFork) },
     seen: new Set([start.number]),
     defaultBranch,
   };
@@ -109,25 +118,27 @@ function toMember(link: BranchLink): TrainMember {
  * The single line of stacked PRs through the start PR, bottom first.
  * - Down: open or merged PRs, until a trunk or release branch.
  * - Up: open PRs, until the line splits or ends.
+ * - Never up from a fork PR.
  */
-export async function walkTrain(start: TrainMember, defaultBranch: string, lookup: LinkLookup): Promise<TrainMember[]> {
-  const walk = startWalk(start, defaultBranch);
+export async function walkTrain(start: TrainMember, defaultBranch: string, lookup: LinkLookup, isFromFork = false): Promise<TrainMember[]> {
+  const walk = startWalk(start, defaultBranch, isFromFork);
   while (isWalking(walk)) await stepBothWays(walk, lookup);
   const below = walk.down.links.toReversed().map(toMember);
   const above = walk.up.links.map(toMember);
   return [...below, start, ...above];
 }
 
-type PrWithBranches = PullRequest & { headRef: string; defaultBranch: string };
+type PrWithBranches = PullRequest & { headRef: string; defaultBranch: string; isFromFork: boolean };
 
 function hasBranchFacts(pr: PullRequest): pr is PrWithBranches {
-  return pr.headRef !== undefined && pr.defaultBranch !== undefined;
+  const hasBranches = pr.headRef !== undefined && pr.defaultBranch !== undefined;
+  return hasBranches && pr.isFromFork !== undefined;
 }
 
 /** Saved branches when the PR has them, else asks GitHub. */
 async function branchesOf(pr: PullRequest): Promise<BranchFacts> {
-  if (hasBranchFacts(pr)) return { baseRef: pr.baseRef, headRef: pr.headRef, defaultBranch: pr.defaultBranch };
-  return fetchBranchFacts(pr);
+  if (!hasBranchFacts(pr)) return fetchBranchFacts(pr);
+  return { baseRef: pr.baseRef, headRef: pr.headRef, defaultBranch: pr.defaultBranch, isFromFork: pr.isFromFork };
 }
 
 // - Inbox PRs are open.
@@ -135,16 +146,23 @@ function startMember(pr: PullRequest, branches: BranchFacts): TrainMember {
   return { number: pr.number, title: pr.title, state: "open", baseRef: branches.baseRef, headRef: branches.headRef, url: pr.url };
 }
 
+// - Forked trains differ by their top branch.
+function trainKeyOf(repo: { owner: string; repo: string }, members: TrainMember[]): string {
+  const bottom = members[0].headRef;
+  const top = members.at(-1)!.headRef;
+  return `${repo.owner}/${repo.repo}@${bottom}..${top}`;
+}
+
 /** A train needs at least two PRs; one PR alone is null. */
 export function trainFrom(repo: { owner: string; repo: string }, members: TrainMember[]): Train | null {
-  const key = `${repo.owner}/${repo.repo}@${members[0].headRef}`;
-  return members.length > 1 ? { key, owner: repo.owner, repo: repo.repo, members } : null;
+  if (members.length < 2) return null;
+  return { key: trainKeyOf(repo, members), owner: repo.owner, repo: repo.repo, members };
 }
 
 /** The train this PR belongs to, or null when it stands alone. */
 export async function findTrain(pr: PullRequest): Promise<Train | null> {
   const branches = await branchesOf(pr);
   const lookup: LinkLookup = (request) => fetchBranchLinks(pr.owner, pr.repo, request);
-  const members = await walkTrain(startMember(pr, branches), branches.defaultBranch, lookup);
+  const members = await walkTrain(startMember(pr, branches), branches.defaultBranch, lookup, branches.isFromFork);
   return trainFrom(pr, members);
 }

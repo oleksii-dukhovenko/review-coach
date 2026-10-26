@@ -18,6 +18,8 @@ type EssayReviewProps = {
   // - Preparing and out-of-date notices: under the header on the overview, on top elsewhere.
   banners?: ReactNode;
   extra?: ReactNode;
+  // - Fetches the page data again.
+  onReload: () => void;
 };
 
 function readyGuide(page: PrPageData): Guide | null {
@@ -53,7 +55,7 @@ function clampView(view: EssayView, steps: EssayStep[]): EssayView {
 }
 
 /** The walkthrough as a front page and an essay per step. */
-export function EssayReview({ route, page, view, goTo, actions, banners, extra }: EssayReviewProps) {
+export function EssayReview({ route, page, view, goTo, actions, banners, extra, onReload }: EssayReviewProps) {
   const data = page.walkthrough!.data as WalkthroughData;
   const guide = readyGuide(page);
   const steps = useMemo(() => buildSteps(data, guide), [page.walkthrough?.builtAt, page.guide?.builtAt]);
@@ -67,7 +69,7 @@ export function EssayReview({ route, page, view, goTo, actions, banners, extra }
   return (
     <>
       {shown.kind === "lede" ? null : <div className="pr-banners">{banners}</div>}
-      {shown.kind === "lede" ? <LedePage session={session} data={data} steps={steps} goTo={goTo} actions={actions} banners={banners} extra={extra} /> : null}
+      {shown.kind === "lede" ? <LedePage session={session} data={data} steps={steps} goTo={goTo} actions={actions} banners={banners} extra={extra} onReload={onReload} /> : null}
       {shown.kind === "step" ? <StepPage session={session} data={data} steps={steps} step={steps[shown.index]} goTo={goTo} canPost={canPost} /> : null}
       {shown.kind === "finish" ? <FinishPage session={session} data={data} steps={steps} goTo={goTo} canPost={canPost} /> : null}
       {shown.kind === "files" ? <FilesPage session={session} data={data} steps={steps} goTo={goTo} /> : null}

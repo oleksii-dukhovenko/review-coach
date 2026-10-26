@@ -1,9 +1,10 @@
 import { useMemo, type ReactNode } from "react";
 
 import type { Anatomy, Scene, ScenePart, TrainView } from "../../../server/sceneSchema.ts";
+import { drawableScene, drawableTrainScene } from "../anatomy/frame.ts";
 import { StoryPicture } from "../anatomy/StoryPicture.tsx";
 import { TrainPicture } from "../anatomy/TrainPicture.tsx";
-import type { PictureNode, PrPageData, WalkthroughData } from "../api.ts";
+import { api, type JobRecord, type PictureNode, type PrPageData, type WalkthroughData } from "../api.ts";
 import { Markdown } from "../components/basics.tsx";
 import { Icon } from "../components/Icon.tsx";
 import type { ClickedNode } from "../components/Mermaid.tsx";
@@ -26,6 +27,8 @@ type LedeProps = {
   banners?: ReactNode;
   // - "Comments waiting on you" for your own PRs.
   extra?: ReactNode;
+  // - Fetches the page data again.
+  onReload: () => void;
 };
 
 function standfirstOf(data: WalkthroughData): string {
@@ -156,17 +159,44 @@ function OverviewTabs({ steps, data, goTo, session }: { steps: EssayStep[]; data
   return <PrTabs tabs={tabs} />;
 }
 
-// - An older server sends neither field.
-function readySceneOf(page: PrPageData): Scene | null {
-  const job = page.anatomy;
-  if (job?.status !== "ready") return null;
-  const scene = (job.data as Anatomy | null)?.scene ?? null;
-  return scene?.parts.length ? scene : null;
+// - The saved picture stays up during a rebuild.
+function hasSavedBuild(job: JobRecord | null): job is JobRecord {
+  return Boolean(job?.data && job.builtAt);
 }
 
+/** The saved scene, without parts this build cannot draw. */
+function savedSceneOf(page: PrPageData): Scene | null {
+  const job = page.anatomy;
+  if (!hasSavedBuild(job)) return null;
+  const scene = (job.data as Anatomy).scene;
+  const drawable = scene ? drawableScene(scene) : null;
+  return drawable?.parts.length ? drawable : null;
+}
+
+/** The train view, without groups this build cannot draw. */
 function trainOf(page: PrPageData): TrainView | null {
   const view = page.train;
-  return view?.scene?.groups.length ? view : null;
+  if (!view?.scene) return null;
+  const scene = drawableTrainScene(view.scene);
+  return scene.groups.length ? { ...view, scene } : null;
+}
+
+function isDrawing(job: JobRecord | null): boolean {
+  return job?.status === "queued" || job?.status === "building";
+}
+
+/** A quiet line while the picture is drawn, or a retry when it failed. */
+function StoryStatus({ session, onReload }: { session: ReviewSession; onReload: () => void }) {
+  const job = session.page.anatomy;
+  const tryAgain = () => void api.prepareAnatomy(session.route).then(onReload);
+  if (isDrawing(job)) return <p className="small muted story-status"><Working size={13}>Drawing the picture...</Working></p>;
+  if (job?.status !== "failed") return null;
+  return (
+    <p className="small muted story-status">
+      <span>The picture could not be drawn.</span>
+      <button className="btn btn-ghost btn-small" onClick={tryAgain}>Try again</button>
+    </p>
+  );
 }
 
 function nodeOfPart(part: ScenePart): PictureNode {
@@ -197,19 +227,19 @@ function StoryCard({ session, data, scene }: { session: ReviewSession; data: Wal
   );
 }
 
-function AnatomyPictures({ session, data }: { session: ReviewSession; data: WalkthroughData }) {
+function AnatomyPictures({ session, data, onReload }: { session: ReviewSession; data: WalkthroughData; onReload: () => void }) {
   const train = trainOf(session.page);
-  const scene = readySceneOf(session.page);
+  const scene = savedSceneOf(session.page);
   return (
     <>
       {train ? <TrainPicture view={train} /> : null}
-      {scene ? <StoryCard session={session} data={data} scene={scene} /> : null}
+      {scene ? <StoryCard session={session} data={data} scene={scene} /> : <StoryStatus session={session} onReload={onReload} />}
     </>
   );
 }
 
 /** The front page: what this PR does, where to look hardest, and how long it takes. */
-export function LedePage({ session, data, steps, goTo, actions, banners, extra }: LedeProps) {
+export function LedePage({ session, data, steps, goTo, actions, banners, extra, onReload }: LedeProps) {
   return (
     <div className="lede">
       <PrHeader pr={session.page.pr} actions={actions} tabs={<OverviewTabs steps={steps} data={data} goTo={goTo} session={session} />} />
@@ -217,7 +247,7 @@ export function LedePage({ session, data, steps, goTo, actions, banners, extra }
       <ChangesBanner change={data.changes?.at(-1)} onOpenFile={session.openFile} />
       <div className="lede-grid">
         <div className="lede-main">
-          <AnatomyPictures session={session} data={data} />
+          <AnatomyPictures session={session} data={data} onReload={onReload} />
           <section className="lede-card">
             <h2 className="lede-label">In one line</h2>
             <p className="lede-standfirst">{standfirstOf(data)}</p>

@@ -32,11 +32,11 @@ export function setAutoPrepareMode(mode: AutoPrepare): void {
 }
 
 // - Built from a ready walkthrough.
-const FOLLOW_ON_KINDS: JobKind[] = ["guide", "anatomy"];
+const AUTO_BUILT_AFTER_WALKTHROUGH: JobKind[] = ["guide", "anatomy"];
 
 function unbuiltFollowOns(pr: PullRequest): JobKind[] {
   if (!isWalkthroughReady(pr)) return [];
-  return FOLLOW_ON_KINDS.filter((kind) => hasNeverBeenBuilt(pr, kind));
+  return AUTO_BUILT_AFTER_WALKTHROUGH.filter((kind) => hasNeverBeenBuilt(pr, kind));
 }
 
 /** Prepares ahead only what the "Prepare automatically" setting allows. */

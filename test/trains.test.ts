@@ -158,6 +158,15 @@ describe("walkTrain", () => {
     expect(members.at(-1)?.number).toBe(240);
   });
 
+  it("does not look above a PR whose branch lives in a fork", async () => {
+    const github = fakeGitHub([
+      fakePr({ number: 1, baseRef: "develop", headRef: "step-1" }),
+      fakePr({ number: 101, baseRef: "fix-login", headRef: "fix-login-2" }),
+    ]);
+    const members = await walkTrain(startOn("step-1", "fix-login"), "develop", github, true);
+    expect(numbersOf(members)).toEqual([1, 100]);
+  });
+
   it("returns only this PR when nothing is stacked below or above it", async () => {
     const github = fakeGitHub([]);
     const members = await walkTrain(startOn("develop", "step-1"), "develop", github);
@@ -167,11 +176,24 @@ describe("walkTrain", () => {
 });
 
 describe("trainFrom", () => {
-  it("names the train after the bottom PR's branch", () => {
+  it("names the train after its bottom and top PRs' branches", () => {
     const members = [startOn("develop", "step-1", 1), startOn("step-1", "step-2", 2)];
     const train = trainFrom({ owner: "acme", repo: "shop" }, members);
-    expect(train?.key).toBe("acme/shop@step-1");
+    expect(train?.key).toBe("acme/shop@step-1..step-2");
     expect(numbersOf(train?.members ?? [])).toEqual([1, 2]);
+  });
+
+  it("gives two PRs built on the same PR two different trains", async () => {
+    const github = fakeGitHub([
+      fakePr({ number: 1, baseRef: "develop", headRef: "step-1" }),
+      fakePr({ number: 2, baseRef: "step-1", headRef: "option-a" }),
+      fakePr({ number: 3, baseRef: "step-1", headRef: "option-b" }),
+    ]);
+    const fromTwo = trainFrom({ owner: "acme", repo: "shop" }, await walkTrain(startOn("step-1", "option-a", 2), "develop", github));
+    const fromThree = trainFrom({ owner: "acme", repo: "shop" }, await walkTrain(startOn("step-1", "option-b", 3), "develop", github));
+    expect(numbersOf(fromTwo?.members ?? [])).toEqual([1, 2]);
+    expect(numbersOf(fromThree?.members ?? [])).toEqual([1, 3]);
+    expect(fromTwo?.key).not.toBe(fromThree?.key);
   });
 
   it("gives no train for a PR that stands alone", () => {

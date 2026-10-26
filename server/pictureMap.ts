@@ -1,23 +1,15 @@
 import { randomUUID } from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
 
 import { ensureCheckout } from "./checkout.ts";
 import { runClaudeJson } from "./claude.ts";
 import { getJob, getPr, saveJobData } from "./db.ts";
+import { lineCountOf } from "./fileLines.ts";
 import { pictureMapPrompt } from "./prompts.ts";
 import { checkedCodeLink } from "./sceneCheck.ts";
 import { pictureMapJsonSchema, pictureMapSchema, type PictureNode } from "./schemas.ts";
 import type { WalkthroughData } from "./walkthrough.ts";
 
 const pending = new Map<string, Promise<PictureNode[]>>();
-
-export function lineCountOf(worktree: string, file: string): number {
-  const fullPath = path.resolve(worktree, file);
-  const isInside = fullPath.startsWith(`${path.resolve(worktree)}${path.sep}`);
-  if (!isInside || !fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) return 0;
-  return fs.readFileSync(fullPath, "utf8").split("\n").length;
-}
 
 /** Drops paths that do not exist and keeps line ranges inside the file. */
 export function checkedNode(node: PictureNode, lineCount: number): PictureNode {

@@ -1,4 +1,4 @@
-import type { KeyboardEvent, ReactNode } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 
 import type { Frame, FrameLink, FramePart } from "./frame.ts";
 import { labelLines } from "./layout.ts";
@@ -66,30 +66,54 @@ export type PartHandlers = {
   isClickable: (part: FramePart) => boolean;
   describe: (part: FramePart) => string;
   onPick?: (part: FramePart, element: Element) => void;
+  // - Pointer or keyboard focus; null when it leaves.
   onPoint?: (part: FramePart | null) => void;
+  // - Keyboard focus only.
+  onFocus?: (part: FramePart) => void;
 };
 
+function isPickKey(key: string): boolean {
+  return key === "Enter" || key === " ";
+}
+
 function pickOnKey(event: KeyboardEvent<SVGGElement>, pick: () => void) {
-  if (event.key !== "Enter" && event.key !== " ") return;
-  event.preventDefault();
-  pick();
+  if (isPickKey(event.key)) {
+    event.preventDefault();
+    pick();
+  }
+}
+
+function isClickablePart(part: FramePart, handlers?: PartHandlers): boolean {
+  const canClick = Boolean(handlers?.isClickable(part));
+  return canClick && !part.isHidden;
+}
+
+/** Button props for a part that opens something; none otherwise. */
+function clickProps(part: FramePart, handlers?: PartHandlers) {
+  if (!isClickablePart(part, handlers)) return {};
+  const pick = (element: Element) => handlers?.onPick?.(part, element);
+  return {
+    "data-clickable": "", tabIndex: 0, role: "button", "aria-label": handlers?.describe(part),
+    onClick: (event: MouseEvent<SVGGElement>) => pick(event.currentTarget),
+    onKeyDown: (event: KeyboardEvent<SVGGElement>) => pickOnKey(event, () => pick(event.currentTarget)),
+  };
+}
+
+/** Tells the handlers when a part is pointed at or focused. */
+function pointProps(part: FramePart, handlers?: PartHandlers) {
+  const point = (pointed: FramePart | null) => handlers?.onPoint?.(pointed);
+  const focus = () => {
+    point(part);
+    handlers?.onFocus?.(part);
+  };
+  return { onPointerEnter: () => point(part), onPointerLeave: () => point(null), onFocus: focus, onBlur: () => point(null) };
 }
 
 function PartView({ part, handlers }: { part: FramePart; handlers?: PartHandlers }) {
-  const isClickable = Boolean(handlers?.isClickable(part)) && !part.isHidden;
-  const pick = (element: Element) => handlers?.onPick?.(part, element);
   return (
     <g
       className="anatomy-part" data-part={part.id} data-kind={part.kind} data-ink={inkAttribute(part.ink)}
-      data-hidden={part.isHidden ? "" : undefined} data-clickable={isClickable ? "" : undefined}
-      tabIndex={isClickable ? 0 : undefined} role={isClickable ? "button" : undefined}
-      aria-label={isClickable ? handlers?.describe(part) : undefined}
-      onClick={isClickable ? (event) => pick(event.currentTarget) : undefined}
-      onKeyDown={isClickable ? (event) => pickOnKey(event, () => pick(event.currentTarget)) : undefined}
-      onPointerEnter={handlers?.onPoint ? () => handlers.onPoint?.(part) : undefined}
-      onPointerLeave={handlers?.onPoint ? () => handlers.onPoint?.(null) : undefined}
-      onFocus={handlers?.onPoint ? () => handlers.onPoint?.(part) : undefined}
-      onBlur={handlers?.onPoint ? () => handlers.onPoint?.(null) : undefined}
+      data-hidden={part.isHidden ? "" : undefined} {...clickProps(part, handlers)} {...pointProps(part, handlers)}
     >
       <Pieces pieces={part.pieces} />
     </g>
@@ -107,7 +131,11 @@ function PartLabel({ part, size }: { part: FramePart; size: number }) {
 
 type DrawingProps = { frame: Frame; label: string; handlers?: PartHandlers; className?: string };
 
-/** One frame of an anatomy drawing: base, floor links, parts far to near, then their floor labels. */
+/**
+ * One frame of an anatomy drawing.
+ * - Base, floor links, then parts far to near.
+ * - Floor labels last, over everything.
+ */
 export function Drawing({ frame, label, handlers, className }: DrawingProps) {
   return (
     <svg className={`iso-svg anatomy-svg ${className ?? ""}`} viewBox={frame.viewBox} role={handlers ? "group" : "img"} aria-label={label}>

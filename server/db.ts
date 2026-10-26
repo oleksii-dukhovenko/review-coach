@@ -6,17 +6,20 @@ import { config } from "./config.ts";
 import type { MainJobKind } from "./jobKinds.ts";
 import type { JobStatus, PullRequest } from "./types.ts";
 
-// - "train" jobs are stored under the train's key, not a PR's.
+// - Train jobs are stored under the train's key.
 export type JobKind = MainJobKind | "guide" | "anatomy" | "train";
 
-// - Built from a walkthrough; they never replace the ask context.
-const FOLLOW_ON_KINDS: JobKind[] = ["guide", "anatomy", "train"];
+// - Built from a walkthrough.
+// - Saving one never replaces the ask context.
+const KEEPS_ASK_CONTEXT: JobKind[] = ["guide", "anatomy", "train"];
 
 export type JobRecord = {
   prKey: string;
   kind: JobKind;
   status: JobStatus;
-  // - Head sha for walkthroughs, thread fingerprint for triage, member fingerprint for trains.
+  // - Walkthrough: head sha.
+  // - Triage: thread fingerprint.
+  // - Train: member fingerprint.
   builtFor: string | null;
   data: unknown;
   error: string | null;
@@ -187,7 +190,7 @@ export function saveFinishedJob(job: FinishedJob): void {
          data = excluded.data, error = NULL, session_id = excluded.session_id, built_at = excluded.built_at`,
     )
     .run(job.prKey, job.kind, job.builtFor, JSON.stringify(job.data), job.sessionId, new Date().toISOString());
-  const replacesAskContext = !FOLLOW_ON_KINDS.includes(job.kind);
+  const replacesAskContext = !KEEPS_ASK_CONTEXT.includes(job.kind);
   if (replacesAskContext) database.prepare("DELETE FROM ask_sessions WHERE pr_key = ?").run(job.prKey);
 }
 

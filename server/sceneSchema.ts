@@ -92,33 +92,35 @@ export type TrainScene = z.infer<typeof trainSceneSchema>;
 export type TrainGroup = z.infer<typeof trainGroup>;
 
 /** One PR in a stacked train, bottom first. */
-export interface TrainMember {
+export type TrainMember = {
   number: number;
   title: string;
   state: "open" | "merged";
   baseRef: string;
   headRef: string;
   url: string;
-}
+};
 
 /** A straight line of stacked PRs through one PR. */
-export interface Train {
-  /** Stable id: owner/repo plus the bottom PR's head branch. */
+export type Train = {
+  // - owner/repo, then the bottom and top PRs' head branches.
   key: string;
   owner: string;
   repo: string;
-  /** Bottom (closest to the main branch) first. */
+  // - Bottom (closest to the main branch) first.
   members: TrainMember[];
-}
+};
 
 /** What the PR page gets about the train this PR belongs to. */
-export interface TrainView {
+export type TrainView = {
   train: Train;
-  /** The PR this page is about. */
+  // - The PR this page is about.
   currentNumber: number;
   scene: TrainScene | null;
   status: JobStatus;
-}
+  // - Train PRs review-coach has; the rest open on GitHub.
+  inInbox: number[];
+};
 
 function toClaudeJsonSchema(schema: z.ZodType): object {
   const { $schema: _unused, ...jsonSchema } = z.toJSONSchema(schema);

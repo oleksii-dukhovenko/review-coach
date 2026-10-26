@@ -12,7 +12,7 @@ import { openInEditor } from "./openInEditor.ts";
 import { pictureNodes } from "./pictureMap.ts";
 import { rewriteInPlainWords } from "./plainWords.ts";
 import { replyToThread, submitReview, type ReviewSubmission } from "./posting.ts";
-import { enqueue, isPaused, resumeQueue } from "./queue.ts";
+import { enqueue, isPaused, lookUpTrainOnce, resumeQueue } from "./queue.ts";
 import { findReferences, isIdentifier, readFileView, readSnippet, warmUpForPr, type ReferenceQuery } from "./references.ts";
 import { checkForUpdate, startUpdate, versionInfo } from "./selfUpdate.ts";
 import { trainViewFor } from "./trainAnatomy.ts";
@@ -112,6 +112,7 @@ export function buildRoutes(): Hono {
   api.get(prPath, (context) => {
     const pr = requirePr(context);
     warmUpForPr(pr);
+    lookUpTrainOnce(pr);
     return context.json({
       pr,
       jobKinds: mainJobKinds(pr),

@@ -12,7 +12,7 @@ const STEP_MS = 3200;
 
 const STEP_NAMES: Record<StoryStep["key"], string> = { before: "Before", change: "What the PR adds", after: "After" };
 
-// - The progress bar fills over the same time a step shows.
+// - The progress bar fills while a step shows.
 const STEP_TIME = { "--story-step-time": `${STEP_MS}ms` } as CSSProperties;
 
 type Player = { step: number; isRunning: boolean; show: (step: number) => void; stop: () => void };
@@ -25,7 +25,11 @@ function useAutoAdvance(isRunning: boolean, step: number, advance: () => void) {
   }, [isRunning, step]);
 }
 
-/** Plays the steps in a loop until the reader picks one; pauses off screen; never plays under reduced motion. */
+/**
+ * Plays the steps in a loop until the reader picks one.
+ * - Pauses off screen.
+ * - Never plays under reduced motion.
+ */
 function useStoryPlayer(card: RefObject<Element | null>, count: number, startStep: number, canPlay: boolean): Player {
   const [step, setStep] = useState(startStep);
   const [isStopped, setStopped] = useState(!canPlay);
@@ -43,9 +47,17 @@ function useStoryPlayer(card: RefObject<Element | null>, count: number, startSte
   return { step, isRunning, show, stop };
 }
 
+function isForwardKey(key: string): boolean {
+  return key === "ArrowDown" || key === "ArrowRight";
+}
+
+function isBackKey(key: string): boolean {
+  return key === "ArrowUp" || key === "ArrowLeft";
+}
+
 function nextStepFor(key: string, step: number, count: number): number | null {
-  if (key === "ArrowDown" || key === "ArrowRight") return (step + 1) % count;
-  if (key === "ArrowUp" || key === "ArrowLeft") return (step - 1 + count) % count;
+  if (isForwardKey(key)) return (step + 1) % count;
+  if (isBackKey(key)) return (step - 1 + count) % count;
   if (key === "Home") return 0;
   return key === "End" ? count - 1 : null;
 }
@@ -82,6 +94,7 @@ function StepList({ steps, player }: { steps: StoryStep[]; player: Player }) {
   );
 }
 
+// - Focus stops the story; the focused part stays shown.
 function partHandlers(scene: Scene, player: Player, onOpenPart?: (part: ScenePart, element: Element) => void): PartHandlers {
   const scenePartOf = (part: FramePart) => scene.parts.find((candidate) => candidate.id === part.id);
   return {
@@ -93,26 +106,33 @@ function partHandlers(scene: Scene, player: Player, onOpenPart?: (part: ScenePar
       player.stop();
       onOpenPart(scenePart, element);
     },
+    onFocus: () => player.stop(),
   };
 }
 
 type StoryPictureProps = {
   scene: Scene;
   onOpenPart?: (part: ScenePart, element: Element) => void;
-  // - Shows this step and never plays; used to pin a step for screenshots.
+  // - Shows this step and never plays.
+  // - Pins a step for screenshots.
   pinnedStep?: number;
+  // - Shows the scene's one-line summary on top.
+  withTldr?: boolean;
 };
 
+function stepCaption(step: StoryStep | undefined): string {
+  return step ? `${STEP_NAMES[step.key]}: ${step.say}` : "";
+}
+
 /** One small drawing that plays the PR's story: before, what the PR adds, after. */
-export function StoryPicture({ scene, onOpenPart, pinnedStep }: StoryPictureProps) {
+export function StoryPicture({ scene, onOpenPart, pinnedStep, withTldr }: StoryPictureProps) {
   const frames = useMemo(() => storyFrames(scene), [scene]);
   const card = useRef<HTMLElement>(null);
   const player = useStoryPlayer(card, frames.length, pinnedStep ?? 0, pinnedStep === undefined);
-  const step = scene.steps[player.step];
-  const label = `${scene.object} ${step ? `${STEP_NAMES[step.key]}: ${step.say}` : ""}`;
+  const label = `${scene.object} ${stepCaption(scene.steps[player.step])}`;
   return (
     <section ref={card} className="story-card anatomy iso" data-playing={player.isRunning ? "" : undefined} style={STEP_TIME} aria-label="This PR as a story">
-      <p className="story-tldr"><b>In one line:</b> {scene.tldr}</p>
+      {withTldr ? <p className="story-tldr"><b>In one line:</b> {scene.tldr}</p> : null}
       <div className="story-player">
         <div className="story-drawing">
           <Drawing frame={frames[player.step]!} label={label} handlers={partHandlers(scene, player, onOpenPart)} />

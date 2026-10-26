@@ -29,6 +29,9 @@ export type PullRequest = {
   headRef?: string;
   // - The repo's main branch, e.g. develop.
   defaultBranch?: string;
+  // - True when the head branch lives in someone's fork.
+  // - Missing on PRs saved before it was fetched.
+  isFromFork?: boolean;
   additions: number;
   deletions: number;
   // - Missing on PRs saved before it was fetched.

@@ -11,13 +11,22 @@ const MAX_SCENE_LINKS = 6;
 const MAX_GROUPS = 8;
 const MAX_TRAIN_LINKS = 8;
 const MAX_CODE_LINES = 160;
+const MAX_LABEL_WORDS = 3;
+
+/** A part's first and last code line, to find it again. */
+export type PartAnchor = { first: string; last: string };
 
 /** What the anatomy job saves for one PR. */
 export type AnatomyData = {
   scene: Scene | null;
   // - Story and big picture the scene was made from.
   basedOn: string;
+  // - Keyed by part id; only parts with code.
+  anchors?: Record<string, PartAnchor>;
 };
+
+/** A file's lines in the checkout; empty when it is gone. */
+export type FileLines = (file: string) => string[];
 
 /** What the train job saves for one train. */
 export type TrainSceneData = { scene: TrainScene | null };
@@ -107,6 +116,12 @@ function neighbourLinks(links: SceneLink[], items: Placed[], maxLinks: number): 
   return firstOfEach(kept, linkEnds).slice(0, maxLinks);
 }
 
+/** At most three words, so every view shows the same label. */
+function shortLabel<T extends { label: string }>(item: T): T {
+  const words = item.label.trim().split(/\s+/);
+  return { ...item, label: words.slice(0, MAX_LABEL_WORDS).join(" ") };
+}
+
 function withCheckedCode(part: ScenePart, lineCountOf: (file: string) => number): ScenePart {
   const lineCount = part.file ? lineCountOf(part.file) : 0;
   return checkedCodeLink(part, lineCount);
@@ -114,7 +129,7 @@ function withCheckedCode(part: ScenePart, lineCountOf: (file: string) => number)
 
 function checkedParts(parts: ScenePart[], lineCountOf: (file: string) => number): ScenePart[] {
   const uniqueParts = firstOfEach(parts, (part) => part.id).slice(0, MAX_PARTS);
-  return onFreeCells(uniqueParts).map((part) => withCheckedCode(part, lineCountOf));
+  return onFreeCells(uniqueParts).map(shortLabel).map((part) => withCheckedCode(part, lineCountOf));
 }
 
 function defaultLook(partId: string): PartLook {
@@ -166,6 +181,47 @@ export function checkedScene(scene: Scene, lineCountOf: (file: string) => number
   return { ...scene, parts, links: neighbourLinks(scene.links, parts, MAX_SCENE_LINKS), steps };
 }
 
+function anchorOf(part: ScenePart, linesOf: FileLines): PartAnchor {
+  const lines = linesOf(part.file);
+  return { first: lines[part.startLine - 1] ?? "", last: lines[part.endLine - 1] ?? "" };
+}
+
+/** Each code part's first and last line, as text. */
+export function anchorsOf(scene: Scene, linesOf: FileLines): Record<string, PartAnchor> {
+  const withCode = scene.parts.filter((part) => part.file !== "");
+  return Object.fromEntries(withCode.map((part) => [part.id, anchorOf(part, linesOf)]));
+}
+
+/** The 1-based number of the line with this text nearest `near`. */
+function nearestLineWith(lines: string[], text: string, near: number): number | undefined {
+  const matches = lines.flatMap((line, index) => (line === text ? [index + 1] : []));
+  const byDistance = (left: number, right: number) => Math.abs(left - near) - Math.abs(right - near);
+  return matches.sort(byDistance)[0];
+}
+
+function withoutCode(part: ScenePart): ScenePart {
+  return { ...part, file: "", startLine: 0, endLine: 0 };
+}
+
+/** The part at its lines' new place, or without code. */
+function movedPart(part: ScenePart, anchor: PartAnchor | undefined, linesOf: FileLines): ScenePart {
+  if (!part.file || !anchor) return part;
+  const lines = linesOf(part.file);
+  const startLine = nearestLineWith(lines, anchor.first, part.startLine);
+  const length = part.endLine - part.startLine;
+  const endLine = nearestLineWith(lines, anchor.last, (startLine ?? part.startLine) + length);
+  const isFound = startLine !== undefined && endLine !== undefined && endLine >= startLine;
+  return isFound ? { ...part, startLine, endLine } : withoutCode(part);
+}
+
+/** A kept scene, its code links moved and checked again. */
+export function movedAnatomy(data: AnatomyData, linesOf: FileLines): AnatomyData {
+  if (!data.scene) return data;
+  const parts = data.scene.parts.map((part) => movedPart(part, data.anchors?.[part.id], linesOf));
+  const scene = checkedScene({ ...data.scene, parts }, (file) => linesOf(file).length);
+  return { ...data, scene, anchors: scene ? anchorsOf(scene, linesOf) : {} };
+}
+
 /** Changes only when the walkthrough's story or big picture changes. */
 export function storyFingerprint(walkthrough: Walkthrough): string {
   const { caption, diagram } = walkthrough.picture;
@@ -212,8 +268,9 @@ function distanceToGroup(group: TrainGroup, position: number, positions: Map<num
 function nearestGroup(groups: TrainGroup[], prNumber: number, positions: Map<number, number>): TrainGroup {
   const position = positions.get(prNumber)!;
   let nearest = groups[0];
+  const isNearer = (group: TrainGroup) => distanceToGroup(group, position, positions) < distanceToGroup(nearest, position, positions);
   for (const group of groups) {
-    if (distanceToGroup(group, position, positions) < distanceToGroup(nearest, position, positions)) nearest = group;
+    if (isNearer(group)) nearest = group;
   }
   return nearest;
 }
@@ -231,14 +288,17 @@ function inTrainOrder(prs: number[], positions: Map<number, number>): number[] {
 function withEveryMember(groups: TrainGroup[], memberNumbers: number[]): TrainGroup[] {
   const positions = new Map(memberNumbers.map((prNumber, position) => [prNumber, position]));
   const addedById = new Map(groups.map((group) => [group.id, [] as number[]]));
-  for (const prNumber of missingMembers(groups, memberNumbers)) addedById.get(nearestGroup(groups, prNumber, positions).id)!.push(prNumber);
-  return groups.map((group) => ({ ...group, prs: inTrainOrder([...group.prs, ...addedById.get(group.id)!], positions) }));
+  const groupIdNearest = (prNumber: number) => nearestGroup(groups, prNumber, positions).id;
+  const addedPrsOf = (groupId: string) => addedById.get(groupId)!;
+  for (const prNumber of missingMembers(groups, memberNumbers)) addedPrsOf(groupIdNearest(prNumber)).push(prNumber);
+  const withAddedPrs = (group: TrainGroup) => ({ ...group, prs: inTrainOrder([...group.prs, ...addedPrsOf(group.id)], positions) });
+  return groups.map(withAddedPrs);
 }
 
 function knownGroups(groups: TrainGroup[], memberNumbers: number[]): TrainGroup[] {
   const uniqueGroups = firstOfEach(groups, (group) => group.id).slice(0, MAX_GROUPS);
   const nonEmpty = claimPrs(uniqueGroups, memberNumbers).filter((group) => group.prs.length > 0);
-  return onFreeCells(nonEmpty);
+  return onFreeCells(nonEmpty).map(shortLabel);
 }
 
 /** Every train PR in exactly one group, or null when no group holds up. */

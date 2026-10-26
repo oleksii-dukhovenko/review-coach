@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 import { api, type DiffFile, type DiffLine, type FileView, type PictureNode, type PrRoute, type WalkthroughData } from "../api.ts";
 import { Icon } from "../components/Icon.tsx";
@@ -235,6 +235,26 @@ async function zoomOut(layer: HTMLElement, camera: HTMLElement, zoom: Zoom) {
   await moveCamera(camera, zoom.from, false).finished;
 }
 
+function stopCamera(camera: HTMLElement) {
+  camera.getAnimations().forEach((animation) => animation.cancel());
+}
+
+/** Dives the camera toward the clicked shape. */
+function startZoom(camera: HTMLElement, clicked: ClickedNode): Zoom {
+  const from = clicked.element.getBoundingClientRect();
+  moveCamera(camera, from, true);
+  return { clicked, from };
+}
+
+function ZoomLayer({ layer, ...panel }: PanelProps & { layer: RefObject<HTMLDivElement | null> }) {
+  return (
+    <div className="zoom-layer" ref={layer}>
+      <Backdrop onClick={panel.onClose} />
+      <ZoomPanel {...panel} />
+    </div>
+  );
+}
+
 /**
  * A panel that grows out of a clicked shape and shows the code behind it.
  * - Put `camera` on the element that holds the shapes; it dives in and back out.
@@ -245,29 +265,20 @@ export function useCodeZoom(session: ReviewSession, data: WalkthroughData, looku
   const layer = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState<Zoom | null>(null);
   useScrollLock(zoom !== null);
-  const open = useCallback((clicked: ClickedNode) => {
-    const from = clicked.element.getBoundingClientRect();
-    moveCamera(camera.current!, from, true);
-    setZoom({ clicked, from });
-  }, []);
+  const open = useCallback((clicked: ClickedNode) => setZoom(startZoom(camera.current!, clicked)), []);
   const close = useCallback(async () => {
     if (!zoom || !layer.current) return;
     await zoomOut(layer.current, camera.current!, zoom);
-    camera.current!.getAnimations().forEach((animation) => animation.cancel());
+    stopCamera(camera.current!);
     setZoom(null);
   }, [zoom]);
   useEscape(() => void close());
   const goTo = (node: PictureNode) => {
-    camera.current!.getAnimations().forEach((animation) => animation.cancel());
+    stopCamera(camera.current!);
     setZoom(null);
     session.openLine(node.file, node.startLine, "RIGHT");
   };
-  const panel = zoom ? (
-    <div className="zoom-layer" ref={layer}>
-      <Backdrop onClick={() => void close()} />
-      <ZoomPanel zoom={zoom} lookup={lookup} session={session} data={data} onClose={() => void close()} onGoTo={goTo} />
-    </div>
-  ) : null;
+  const panel = zoom ? <ZoomLayer layer={layer} zoom={zoom} lookup={lookup} session={session} data={data} onClose={() => void close()} onGoTo={goTo} /> : null;
   return { camera, open, panel };
 }
 

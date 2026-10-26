@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { canReuseAnatomy, checkedScene, checkedTrainScene, hasTrainSceneFor, storyFingerprint, trainFingerprint } from "../server/sceneCheck.ts";
+import {
+  anchorsOf, canReuseAnatomy, checkedScene, checkedTrainScene, hasTrainSceneFor, movedAnatomy, storyFingerprint, trainFingerprint, type AnatomyData,
+} from "../server/sceneCheck.ts";
 import type { PartLook, Scene, ScenePart, StoryStep, Train, TrainScene } from "../server/sceneSchema.ts";
 import type { Walkthrough } from "../server/schemas.ts";
 
@@ -40,7 +42,13 @@ describe("checkedScene", () => {
 
   it("keeps only the first eight parts", () => {
     const parts = Array.from({ length: 10 }, (_unused, position) => part({ id: `part-${position}`, column: position % 4, row: Math.floor(position / 4) % 3 }));
-    expect(checkedScene(scene({ parts }), lineCountOf)!.parts).toHaveLength(8);
+    const keptIds = checkedScene(scene({ parts }), lineCountOf)!.parts.map((kept) => kept.id);
+    expect(keptIds).toEqual(["part-0", "part-1", "part-2", "part-3", "part-4", "part-5", "part-6", "part-7"]);
+  });
+
+  it("cuts a label to its first three words", () => {
+    const wordy = { ...CHECKER, label: "cache never goes stale" };
+    expect(checkedScene(scene({ parts: [TERMINAL, wordy] }), lineCountOf)!.parts[1].label).toBe("cache never goes");
   });
 
   it("drops a second part that reuses an id", () => {
@@ -135,6 +143,27 @@ describe("canReuseAnatomy", () => {
 
   it("asks when there is no picture yet", () => {
     expect(canReuseAnatomy(undefined, story, false)).toBe(false);
+  });
+});
+
+describe("movedAnatomy", () => {
+  const terminalLines = Array.from({ length: 100 }, (_unused, index) => `terminal line ${index + 1}`);
+  const checkerLines = Array.from({ length: 30 }, (_unused, index) => `checker line ${index + 1}`);
+  const linesOn = (files: Record<string, string[]>) => (file: string) => files[file] ?? [];
+  const oldCode = linesOn({ "src/terminal.sh": terminalLines, "src/checker.sh": checkerLines });
+  const saved: AnatomyData = { scene: scene({}), basedOn: "story", anchors: anchorsOf(scene({}), oldCode) };
+
+  it("still opens the same code after 20 lines are added above a part", () => {
+    const shifted = [...Array.from({ length: 20 }, () => "added line"), ...terminalLines];
+    const moved = movedAnatomy(saved, linesOn({ "src/terminal.sh": shifted, "src/checker.sh": checkerLines }));
+    const [terminal, checker] = moved.scene!.parts;
+    expect([terminal.startLine, terminal.endLine]).toEqual([30, 40]);
+    expect([checker.startLine, checker.endLine]).toEqual([5, 9]);
+  });
+
+  it("stops linking a part to code whose file was deleted", () => {
+    const moved = movedAnatomy(saved, linesOn({ "src/checker.sh": checkerLines }));
+    expect(moved.scene!.parts[0].file).toBe("");
   });
 });
 

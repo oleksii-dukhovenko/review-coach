@@ -16,14 +16,20 @@ function pageData(): PageData {
 }
 
 function applyTheme(choice: ThemeChoice) {
-  const isDark = choice === "dark" || (choice === "system" && darkQuery.matches);
+  const followsDarkSystem = choice === "system" && darkQuery.matches;
+  const isDark = choice === "dark" || followsDarkSystem;
   document.documentElement.dataset.theme = isDark ? "dark" : "light";
+}
+
+function isStepNumber(asked: number): boolean {
+  const isInRange = asked >= 1 && asked <= 3;
+  return Number.isInteger(asked) && isInRange;
 }
 
 /** `?step=2` shows step 2 and holds it still. */
 function pinnedStep(): number | undefined {
   const asked = Number(new URLSearchParams(window.location.search).get("step"));
-  return Number.isInteger(asked) && asked >= 1 && asked <= 3 ? asked - 1 : undefined;
+  return isStepNumber(asked) ? asked - 1 : undefined;
 }
 
 function whereOf(part: ScenePart): string {
@@ -34,7 +40,7 @@ function StandalonePage({ scene }: { scene: Scene }) {
   const [where, setWhere] = useState<string | null>(null);
   return (
     <main className="anatomy-page">
-      <StoryPicture scene={scene} pinnedStep={pinnedStep()} onOpenPart={(part) => setWhere(whereOf(part))} />
+      <StoryPicture scene={scene} withTldr pinnedStep={pinnedStep()} onOpenPart={(part) => setWhere(whereOf(part))} />
       {where ? <p className="story-where">{where}</p> : null}
     </main>
   );

@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 
-import { buildAnatomy } from "./anatomy.ts";
+import { buildAnatomy, moveAnatomy, type AnatomyData } from "./anatomy.ts";
 import { UsageLimitError } from "./claude.ts";
 import { getJob, getPr, getSetting, saveFinishedJob, saveSetting, setJobStatus, type JobKind, type JobRecord } from "./db.ts";
 import { threadsFingerprint } from "./jobKinds.ts";
 import { canReuseAnatomy, hasTrainSceneFor, trainFingerprint } from "./sceneCheck.ts";
 import type { Train } from "./sceneSchema.ts";
-import { buildTrainScene, forgetTrain, rememberTrain, savedTrain } from "./trainAnatomy.ts";
+import { buildTrainScene, forgetTrain, hasLookedUpTrain, rememberTrain, savedTrain } from "./trainAnatomy.ts";
 import { findTrain } from "./trains.ts";
 import type { PullRequest } from "./types.ts";
 import {
@@ -91,12 +91,18 @@ function sameBuild(previous: JobRecord): { data: unknown; sessionId: string } {
   return { data: previous.data, sessionId: previous.sessionId ?? randomUUID() };
 }
 
+/** The saved picture, its code links moved to the new code. */
+async function keptAnatomy(pr: PullRequest, previous: JobRecord): Promise<{ data: unknown; sessionId: string }> {
+  const data = await moveAnatomy(pr, previous.data as AnatomyData);
+  return { ...sameBuild(previous), data };
+}
+
 /** The playing picture follows the walkthrough; an unchanged story keeps its picture. */
 async function saveAnatomy(job: Job, pr: PullRequest): Promise<void> {
   const walkthrough = readyWalkthrough(pr);
   const previous = getJob(pr.key, "anatomy");
   const canReuse = canReuseAnatomy(previous?.data, walkthrough.data.walkthrough, job.isFullRebuild === true);
-  const built = canReuse ? sameBuild(previous!) : await buildAnatomy(pr, walkthrough.data);
+  const built = canReuse ? await keptAnatomy(pr, previous!) : await buildAnatomy(pr, walkthrough.data);
   saveFinishedJob({ prKey: job.prKey, kind: job.kind, builtFor: walkthrough.builtFor, data: built.data, sessionId: built.sessionId });
 }
 
@@ -116,6 +122,24 @@ async function queueTrainFor(pr: PullRequest): Promise<void> {
   } catch (error) {
     console.warn(`Could not look up the train for ${pr.key}:`, error);
   }
+}
+
+const trainLookups = new Set<string>();
+
+function isWalkthroughReady(pr: PullRequest): boolean {
+  return getJob(pr.key, "walkthrough")?.status === "ready";
+}
+
+function needsTrainLookup(pr: PullRequest): boolean {
+  const isWaiting = isWalkthroughReady(pr) && !hasLookedUpTrain(pr.key);
+  return isWaiting && !trainLookups.has(pr.key);
+}
+
+/** Looks up a train once for a ready walkthrough without one. */
+export function lookUpTrainOnce(pr: PullRequest): void {
+  if (!needsTrainLookup(pr)) return;
+  trainLookups.add(pr.key);
+  void queueTrainFor(pr).finally(() => trainLookups.delete(pr.key));
 }
 
 /** One picture per train, shared by its PRs; made again only when members change. */

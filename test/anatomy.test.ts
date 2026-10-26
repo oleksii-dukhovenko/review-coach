@@ -100,10 +100,9 @@ describe("labels", () => {
     expect(labelLines("exit checker")).toEqual(["exit checker"]);
   });
 
-  it("splits a long label over two lines and keeps at most three words", () => {
+  it("splits a long label over two lines and keeps every word", () => {
     expect(labelLines("background watcher")).toEqual(["background", "watcher"]);
-    expect(labelLines("one two three four")).toHaveLength(2);
-    expect(labelLines("one two three four").join(" ")).toBe("one two three");
+    expect(labelLines("cache never goes stale")).toEqual(["cache never", "goes stale"]);
   });
 });
 

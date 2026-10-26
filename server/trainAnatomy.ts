@@ -3,10 +3,10 @@ import path from "node:path";
 
 import { askClaudeWithRetry } from "./anatomy.ts";
 import { config } from "./config.ts";
-import { deleteSetting, getJob, getSetting, prTrainSettingKey, saveSetting, trainSettingKey } from "./db.ts";
+import { getJob, getPr, getSetting, prTrainSettingKey, saveSetting, trainSettingKey } from "./db.ts";
 import { trainAnatomyPrompt, type TrainMemberNote } from "./prompts.ts";
 import { checkedTrainScene, type TrainSceneData } from "./sceneCheck.ts";
-import { trainSceneJsonSchema, trainSceneSchema, type Train, type TrainView } from "./sceneSchema.ts";
+import { trainSceneJsonSchema, trainSceneSchema, type Train, type TrainMember, type TrainView } from "./sceneSchema.ts";
 import { prKeyOf, type PullRequest } from "./types.ts";
 import type { BuiltJob, WalkthroughData } from "./walkthrough.ts";
 
@@ -18,8 +18,14 @@ export function rememberTrain(prKey: string, train: Train): void {
   saveSetting(trainSettingKey(train.key), JSON.stringify(train));
 }
 
+// - An empty key means: looked up, in no train.
 export function forgetTrain(prKey: string): void {
-  deleteSetting(prTrainSettingKey(prKey));
+  saveSetting(prTrainSettingKey(prKey), "");
+}
+
+/** True once this PR's train was looked up, found or not. */
+export function hasLookedUpTrain(prKey: string): boolean {
+  return getSetting(prTrainSettingKey(prKey)) !== undefined;
 }
 
 export function savedTrain(trainKey: string): Train | undefined {
@@ -27,14 +33,32 @@ export function savedTrain(trainKey: string): Train | undefined {
   return saved ? (JSON.parse(saved) as Train) : undefined;
 }
 
+function savedTrainOf(pr: PullRequest): Train | undefined {
+  const trainKey = getSetting(prTrainSettingKey(pr.key));
+  return trainKey ? savedTrain(trainKey) : undefined;
+}
+
+function isMemberOf(train: Train, prNumber: number): boolean {
+  return train.members.some((member) => member.number === prNumber);
+}
+
+function isSavedPr(train: Train, member: TrainMember): boolean {
+  return getPr(prKeyOf(train.owner, train.repo, member.number)) !== undefined;
+}
+
+/** Train PRs review-coach can open; the rest open on GitHub. */
+function numbersInInbox(train: Train): number[] {
+  return train.members.filter((member) => isSavedPr(train, member)).map((member) => member.number);
+}
+
 /** The train this PR is in, for the PR page; null when it is in none. */
 export function trainViewFor(pr: PullRequest): TrainView | null {
-  const trainKey = getSetting(prTrainSettingKey(pr.key));
-  const train = trainKey ? savedTrain(trainKey) : undefined;
-  if (!train) return null;
+  const train = savedTrainOf(pr);
+  const isInTrain = train !== undefined && isMemberOf(train, pr.number);
+  if (!isInTrain) return null;
   const job = getJob(train.key, "train");
   const scene = (job?.data as TrainSceneData | null | undefined)?.scene ?? null;
-  return { train, currentNumber: pr.number, scene, status: job?.status ?? "none" };
+  return { train, currentNumber: pr.number, scene, status: job?.status ?? "none", inInbox: numbersInInbox(train) };
 }
 
 function walkthroughTldr(prKey: string): string | null {

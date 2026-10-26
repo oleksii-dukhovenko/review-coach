@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 
 import { ensureCheckout } from "./checkout.ts";
 import { runClaudeJson, UsageLimitError } from "./claude.ts";
-import { lineCountOf } from "./pictureMap.ts";
+import { linesOfFile } from "./fileLines.ts";
 import { anatomyPrompt } from "./prompts.ts";
 import { anatomyJsonSchema, anatomySchema } from "./sceneSchema.ts";
-import { checkedScene, storyFingerprint, type AnatomyData } from "./sceneCheck.ts";
+import { anchorsOf, checkedScene, movedAnatomy, storyFingerprint, type AnatomyData, type FileLines } from "./sceneCheck.ts";
 import type { PullRequest } from "./types.ts";
 import type { BuiltJob, WalkthroughData } from "./walkthrough.ts";
 
@@ -41,13 +41,21 @@ export async function composeScene(input: SceneInput): Promise<BuiltJob<AnatomyD
     parse: (raw) => anatomySchema.parse(raw),
     addDirs: [],
   });
+  const linesOf: FileLines = (file) => linesOfFile(input.worktree, file);
   const askedScene = built.data.scene;
-  const scene = askedScene ? checkedScene(askedScene, (file) => lineCountOf(input.worktree, file)) : null;
-  return { data: { scene, basedOn: storyFingerprint(walkthrough) }, sessionId: built.sessionId };
+  const scene = askedScene ? checkedScene(askedScene, (file) => linesOf(file).length) : null;
+  const anchors = scene ? anchorsOf(scene, linesOf) : {};
+  return { data: { scene, basedOn: storyFingerprint(walkthrough), anchors }, sessionId: built.sessionId };
 }
 
 /** The playing picture for one PR, made from its walkthrough. */
 export async function buildAnatomy(pr: PullRequest, walkthroughData: WalkthroughData): Promise<BuiltJob<AnatomyData>> {
   const checkout = await ensureCheckout(pr);
   return composeScene({ pr, worktree: checkout.worktree, walkthroughData });
+}
+
+/** The saved scene kept, its code links moved to the PR's new code. */
+export async function moveAnatomy(pr: PullRequest, saved: AnatomyData): Promise<AnatomyData> {
+  const checkout = await ensureCheckout(pr);
+  return movedAnatomy(saved, (file) => linesOfFile(checkout.worktree, file));
 }
