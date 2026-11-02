@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { repoFromRemote, toolsHashOf } from "../server/selfUpdate.ts";
+import { checkErrorText, repoFromRemote, toolsHashOf } from "../server/selfUpdate.ts";
 
 describe("repoFromRemote", () => {
   it("reads owner/name from https and ssh remotes", () => {
@@ -34,5 +34,16 @@ describe("toolsHashOf", () => {
     fs.writeFileSync(path.join(same, "README.md"), "app code changes do not count");
     expect(toolsHashOf(first)).toBe(toolsHashOf(same));
     expect(toolsHashOf(first)).not.toBe(toolsHashOf(newer));
+  });
+});
+
+describe("checkErrorText", () => {
+  it("explains a branch GitHub does not have", () => {
+    const notFound = new Error("gh api repos/acme/review-coach/compare/abc...topic failed: gh: Not Found (HTTP 404)");
+    expect(checkErrorText(notFound)).toMatch(/not on GitHub/);
+  });
+
+  it("keeps any other error as it is", () => {
+    expect(checkErrorText(new Error("network down"))).toBe("network down");
   });
 });

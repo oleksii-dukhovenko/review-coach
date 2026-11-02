@@ -88,6 +88,15 @@ const state: Omit<VersionInfo, "canUpdate"> = {
   current: null, behindBy: null, newCommits: [], checkedAt: null, checkError: null, phase: "idle", updateError: null,
 };
 
+const NOT_ON_GITHUB = "This copy's branch or commit is not on GitHub, so it cannot check for updates. Push the branch, or install from master.";
+
+/** Why the check failed, in plain words. */
+export function checkErrorText(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const isNotOnGitHub = message.includes("HTTP 404");
+  return isNotOnGitHub ? NOT_ON_GITHUB : message;
+}
+
 /** Asks GitHub how many commits the branch has that this copy does not. */
 export async function checkForUpdate(): Promise<void> {
   state.current ??= await readBuildInfo();
@@ -107,7 +116,7 @@ export async function checkForUpdate(): Promise<void> {
     state.checkError = null;
   } catch (error) {
     state.behindBy = null;
-    state.checkError = error instanceof Error ? error.message : String(error);
+    state.checkError = checkErrorText(error);
   }
   state.checkedAt = new Date().toISOString();
 }
