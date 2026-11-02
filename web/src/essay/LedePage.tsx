@@ -351,7 +351,7 @@ function MoreAboutThisPr({ isOpen, onToggle, children }: MoreProps) {
   return (
     <div className="lede-more">
       <button className="btn btn-ghost lede-more-toggle" aria-expanded={isOpen} onClick={onToggle}>
-        {isOpen ? "Hide the details" : "More about this PR: pictures, where to look hardest, the full story"}
+        {isOpen ? "Hide the details" : "More about this PR: where to look hardest, diagrams, the full story"}
       </button>
       {isOpen ? <div className="lede-more-body">{children}</div> : null}
     </div>
@@ -376,11 +376,11 @@ export function LedePage({ session, data, steps, goTo, actions, banners, extra, 
         <SkipToReadingPlan />
         <div className="lede-main">
           <StartHereCard story={data.walkthrough.story} />
+          <AnatomyPictures session={session} data={data} onReload={onReload} />
           <PlainFlow flow={data.walkthrough.flow} onOpenLine={session.openLine} />
           <StartReadingButton steps={steps} session={session} goTo={goTo} />
           {extra}
           <MoreAboutThisPr isOpen={isMoreOpen} onToggle={() => setMoreOpen(!isMoreOpen)}>
-            <AnatomyPictures session={session} data={data} onReload={onReload} />
             <AttentionList items={attentionItems(steps, data.walkthrough.hardIdeas)} goTo={goTo} />
             <Background session={session} data={data} />
           </MoreAboutThisPr>
