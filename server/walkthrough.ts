@@ -158,6 +158,13 @@ export async function updateTriage(pr: PullRequest, previous: PreviousBuild<Tria
   return { data: { ...built.data, triage: { threads: [...keptVerdicts, ...built.data.triage.threads] } }, sessionId: built.sessionId };
 }
 
+/** The flow as numbered plain sentences, for the guide prompt. */
+function flowStoryOf(walkthrough: WalkthroughData["walkthrough"]): string {
+  const moment = walkthrough.story.moment ? [`${walkthrough.story.moment}:`] : [];
+  const steps = walkthrough.flow.map((flowStep, flowIndex) => `${flowIndex + 1}. ${flowStep.inPlainWords || flowStep.explanation} (${flowStep.file})`);
+  return [...moment, ...steps].join("\n");
+}
+
 /** Chapters for the Guide, written from an existing walkthrough. */
 export async function buildGuide(pr: PullRequest, walkthroughData: WalkthroughData): Promise<BuiltJob<Guide>> {
   const checkout = await ensureCheckout(pr);
@@ -168,6 +175,7 @@ export async function buildGuide(pr: PullRequest, walkthroughData: WalkthroughDa
       pr,
       files,
       storySummary: `${walkthrough.story.whatItDoes}\n${walkthrough.story.whyNeeded}`,
+      flowStory: flowStoryOf(walkthrough),
       tourNotes: walkthrough.tour.map((stop) => ({ file: stop.file, whyItMatters: stop.whyItMatters })),
     }),
     jsonSchema: guideJsonSchema,

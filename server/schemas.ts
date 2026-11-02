@@ -23,6 +23,13 @@ const flowStep = z.object({
   line: z.number().int(),
   explanation: z.string().describe("Max 15 plain words: what happens here and why, readable without the code"),
   sends: z.string().describe("What this step hands to the next step, max 5 words, e.g. 'job ID', '200 header'. Empty if it hands nothing on, and for the last step."),
+  inPlainWords: z.string().describe(
+    "This step as one sentence of a story told to someone who has never seen the code, max 30 words. "
+    + "Carry on from the step before ('Next', 'That', 'Then'). Say what is happening in the real world and why. "
+    + "The first time a part of the system appears, say what it is in a few words, "
+    + "e.g. 'the hardware service (the program on the terminal that talks to its card reader and printer)'. "
+    + "No function, file, variable or env var names.",
+  ),
 });
 
 const hardIdea = z.object({
@@ -104,6 +111,10 @@ const startHere = z.object({
 });
 
 const story = z.object({
+  moment: z.string().describe(
+    "The real-world moment the flow starts, as a person would say it, max 12 words. "
+    + "e.g. 'When a terminal boots up', 'During a sale, when a card is tapped', 'When a developer opens a PR'.",
+  ),
   startHere: startHere.describe("The first thing the reader sees, before any code. Assume they know nothing about this repo."),
   tldr: z.string().describe("The whole PR in one plain sentence, max 20 words"),
   before: z.string().describe("What a person saw or what happened before this PR. Max 2 short sentences."),
@@ -167,9 +178,16 @@ const guideFile = z.object({
 
 const guideChapter = z.object({
   title: z.string().describe("Max 6 plain words, e.g. Checkout reprices on a 409"),
+  whyHere: z.string().describe(
+    "Why the reader reads this step now, one plain sentence, max 25 words, no code names. "
+    + "First step: where the story starts and why that is the place to begin. Later steps: how it follows from the step before.",
+  ),
   oneLiner: z.string().describe("Max 12 words: what this step does, the one thing to keep in mind"),
   role: z.enum(["core", "follow-on", "supporting"]).describe("core = the heart of the change; follow-on = what it forces elsewhere; supporting = glue, types, tests, config"),
-  summary: z.string().describe("1-2 short sentences, max 35 words: what this chapter changes and why"),
+  summary: z.string().describe(
+    "What the reader is about to read, 1-2 short plain sentences, max 35 words: what this code is for, then what this PR changes in it. "
+    + "Explain any name you use. Statements only: no questions, never 'Did you notice'.",
+  ),
   files: z.array(guideFile),
 });
 

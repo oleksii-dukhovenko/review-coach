@@ -40,7 +40,7 @@ const note = { line: 12, endLine: 12, side: "RIGHT" as const, kind: "syntax" as 
 
 const data: WalkthroughData = {
   walkthrough: {
-    story: { startHere: { problem: "", fix: "", howYouNotice: "" }, tldr: "t", before: "", after: "", whatItDoes: "w", whyNeeded: "n", glossary: [] },
+    story: { moment: "", startHere: { problem: "", fix: "", howYouNotice: "" }, tldr: "t", before: "", after: "", whatItDoes: "w", whyNeeded: "n", glossary: [] },
     picture: { caption: "", diagram: "", nodes: [] },
     hardIdeas: [{ conceptKey: "k", title: "Rates are floats", oneLiner: "Money as float rounds wrong.", analogy: "", diagram: "", jsExample: "", term: "", file: "order.go", line: 12 }],
     flow: [],
@@ -53,8 +53,8 @@ const data: WalkthroughData = {
 const guide: Guide = {
   overview: "o",
   chapters: [
-    { title: "Tax", oneLiner: "Adds tax", role: "core", summary: "s", files: [{ file: "order.go", whatChanged: "w" }] },
-    { title: "Deps", oneLiner: "Bumps a lib", role: "supporting", summary: "s", files: [{ file: "go.sum", whatChanged: "w" }] },
+    { title: "Tax", whyHere: "", oneLiner: "Adds tax", role: "core", summary: "s", files: [{ file: "order.go", whatChanged: "w" }] },
+    { title: "Deps", whyHere: "", oneLiner: "Bumps a lib", role: "supporting", summary: "s", files: [{ file: "go.sum", whatChanged: "w" }] },
   ],
 };
 
@@ -140,7 +140,7 @@ describe("startHereOf", () => {
 });
 
 describe("whereItFits", () => {
-  const flowStep = { actor: "Checkout", label: "Adds tax.", layer: "logic" as const, file: "order.go", line: 12, explanation: "", sends: "" };
+  const flowStep = { actor: "Checkout", label: "Adds tax.", layer: "logic" as const, file: "order.go", line: 12, explanation: "", sends: "", inPlainWords: "" };
   const withFlow: WalkthroughData = { ...data, walkthrough: { ...data.walkthrough, flow: [flowStep, { ...flowStep, file: "pay.go" }] } };
 
   it("names the flow step this step covers", () => {
@@ -148,6 +148,11 @@ describe("whereItFits", () => {
     expect(whereItFits(taxStep, withFlow.walkthrough.flow)).toBe(
       'This is the heart of the change. In "How it runs" this is step 1 of 2 (Checkout: Adds tax).',
     );
+  });
+
+  it("uses the guide's own reason when it has one", () => {
+    const [taxStep] = buildSteps(withFlow, { ...guide, chapters: [{ ...guide.chapters[0], whyHere: "The story starts here." }, guide.chapters[1]] });
+    expect(whereItFits(taxStep, withFlow.walkthrough.flow)).toBe("The story starts here.");
   });
 
   it("falls back to the step's role", () => {

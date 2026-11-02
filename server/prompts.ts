@@ -72,7 +72,9 @@ export function walkthroughPrompt(input: WalkthroughInput): string {
   For each box, name the file and line range of the function or block it stands for.
 - hardIdeas: the few ideas that are hardest to grasp here (syntax, pattern, or design). One-line answer, one-line analogy,
   a tiny diagram only when it shows something words cannot, a JS one-liner when one exists.
-- flow: the run as a hand-off story, entry point first, 3-6 steps. Plain words a newcomer follows without the code. Each step names its actor (the part of the system
+- flow: the run as a story, entry point first, 3-6 steps. story.moment says when it starts in the real world.
+  Each step's inPlainWords carries the story on in plain words, e.g. "When a terminal boots up, the hardware service
+  (the program that talks to the card reader) first reads which terminal it is. Then ...". A newcomer must follow it without the code. Each step names its actor (the part of the system
   doing it) and what it hands to the next step. Same actor name every time that part acts. Point file:line at the code that does it.
 - tour: every non-skim file, in the order the code runs. Each stop gets:
   - notes on syntax, patterns, or design choices the reader may not know, anchored to a line. oneLiner first; keep the explanation short;
@@ -136,21 +138,31 @@ Line numbers: RIGHT side uses new-file lines; LEFT side uses old-file lines of d
   ].join("\n\n");
 }
 
-type GuideInput = { pr: PullRequest; files: DiffFile[]; storySummary: string; tourNotes: { file: string; whyItMatters: string }[] };
+type GuideInput = {
+  pr: PullRequest;
+  files: DiffFile[];
+  storySummary: string;
+  flowStory: string;
+  tourNotes: { file: string; whyItMatters: string }[];
+};
 
 export function guidePrompt(input: GuideInput): string {
   const tourNotes = input.tourNotes.map((stop) => `- ${stop.file}: ${stop.whyItMatters}`).join("\n");
   return [
     coachRole(),
+    `## How to explain things to the reader\n${teachingRules()}`,
     `## The PR\n${input.pr.owner}/${input.pr.repo}#${input.pr.number} by ${input.pr.author}.`,
     untrustedBlock("pr_title", input.pr.title),
     `## What it does (already written)\n${input.storySummary}`,
     `## Files and tags\n${describeFileTags(input.files)}`,
+    `## How it runs, the story the reader just read\n${input.flowStory}`,
     `## Notes already written per file\n${tourNotes}`,
     `## What to produce
-A guide that splits this PR into short steps, like a checklist for reviewing it. It is skimmed, not read.
-- Order steps the way the work was reasoned through: the core change first, then what it forces elsewhere, then supporting glue.
-- Each step: a title of max 6 words, a oneLiner of max 12 words, its role, a 1-2 sentence summary for "More",
+A guide that walks the reader through this PR in short steps. The reader knows nothing about this code. Hold their hand.
+- Order steps along the story above, so the reader follows the same path: start where the story starts.
+  Tests, docs and glue come last.
+- Each step's whyHere tells the reader why they are reading it now and how it links to the step before.
+- Each step: a title of max 6 words, whyHere, a oneLiner of max 12 words, its role, a summary of what they are about to read,
   and its files with max 10 words each on what changed.
 - Every changed file appears in exactly one chapter. Put skim files in a supporting chapter.
 - Plain words. Short sentences. No jargon without a one-line gloss.`,

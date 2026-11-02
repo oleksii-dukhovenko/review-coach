@@ -67,23 +67,30 @@ function StartHereCard({ story }: { story: Story }) {
   );
 }
 
+// - Older flows have no plain sentence.
+function storyLineOf(flowStep: FlowStep): string {
+  return flowStep.inPlainWords || `${flowStep.actor}: ${flowStep.label}. ${flowStep.explanation}`;
+}
+
 function FlowStepItem({ flowStep, onOpenLine }: { flowStep: FlowStep; onOpenLine: OpenLine }) {
   return (
     <li>
-      <span className="flow-step-actor">{flowStep.actor}</span>
-      <span className="flow-step-what">{flowStep.label}</span>
-      {flowStep.explanation ? <span className="flow-step-why">{flowStep.explanation}</span> : null}
-      <button className="link-button small" onClick={() => onOpenLine(flowStep.file, flowStep.line, "RIGHT")}>See the code</button>
+      <span className="flow-step-story">{storyLineOf(flowStep)}</span>
+      <span className="flow-step-code">
+        <span className="mono">{flowStep.actor} · {flowStep.label}</span>
+        <button className="link-button small" onClick={() => onOpenLine(flowStep.file, flowStep.line, "RIGHT")}>See the code</button>
+      </span>
     </li>
   );
 }
 
-/** The run as a short numbered list. */
-function PlainFlow({ flow, onOpenLine }: { flow: FlowStep[]; onOpenLine: OpenLine }) {
+/** The run as a short story, from the moment it starts. */
+function PlainFlow({ moment, flow, onOpenLine }: { moment: string | undefined; flow: FlowStep[]; onOpenLine: OpenLine }) {
   if (flow.length === 0) return null;
   return (
     <section className="lede-card">
       <h2>How it runs</h2>
+      {moment ? <p className="flow-moment">{moment}:</p> : null}
       <ol className="plain-flow">
         {flow.map((flowStep, flowIndex) => <FlowStepItem key={flowIndex} flowStep={flowStep} onOpenLine={onOpenLine} />)}
       </ol>
@@ -377,7 +384,7 @@ export function LedePage({ session, data, steps, goTo, actions, banners, extra, 
         <div className="lede-main">
           <StartHereCard story={data.walkthrough.story} />
           <AnatomyPictures session={session} data={data} onReload={onReload} />
-          <PlainFlow flow={data.walkthrough.flow} onOpenLine={session.openLine} />
+          <PlainFlow moment={data.walkthrough.story.moment} flow={data.walkthrough.flow} onOpenLine={session.openLine} />
           <StartReadingButton steps={steps} session={session} goTo={goTo} />
           {extra}
           <MoreAboutThisPr isOpen={isMoreOpen} onToggle={() => setMoreOpen(!isMoreOpen)}>

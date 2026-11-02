@@ -911,8 +911,9 @@ div.step-code { padding: 10px; }
 .start-here .glossary-row { margin-top: 14px; }
 .plain-flow { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; }
 .plain-flow li { line-height: 1.5; }
-.flow-step-actor { font-weight: 500; margin-right: 6px; }
-.flow-step-why { display: block; font-size: 13.5px; color: var(--text-muted); }
+.flow-moment { margin: 0 0 10px; font-weight: 500; }
+.flow-step-story { display: block; text-wrap: pretty; }
+.flow-step-code { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 12.5px; color: var(--text-muted); }
 .lede-start { align-self: flex-start; min-height: 40px; }
 .lede-more { display: flex; flex-direction: column; gap: 16px; }
 .lede-more-toggle { align-self: flex-start; }

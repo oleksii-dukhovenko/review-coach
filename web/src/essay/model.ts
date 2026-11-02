@@ -33,6 +33,8 @@ export type EssayFile = {
 export type EssayStep = {
   index: number;
   title: string;
+  // - Why the reader reads this step now.
+  whyHere: string;
   oneLiner: string;
   summary: string;
   role: "core" | "follow-on" | "supporting";
@@ -140,11 +142,12 @@ export function minutesFor(files: EssayFile[]): number {
   return Math.max(1, Math.round(changedLines / CHANGED_LINES_PER_MINUTE + questionsIn(files).length));
 }
 
-type StepInput = { title: string; oneLiner: string; summary: string; role: EssayStep["role"]; paths: string[] };
+type StepInput = { title: string; whyHere: string; oneLiner: string; summary: string; role: EssayStep["role"]; paths: string[] };
 
 function chaptersOf(guide: Guide): StepInput[] {
   return guide.chapters.map((chapter) => ({
     title: chapter.title,
+    whyHere: chapter.whyHere ?? "",
     oneLiner: chapter.oneLiner || chapter.summary.split(/(?<=\.)\s/)[0],
     summary: chapter.summary,
     role: chapter.role,
@@ -154,7 +157,7 @@ function chaptersOf(guide: Guide): StepInput[] {
 
 /** Without a guide, each tour stop is its own step. */
 function stopsAsSteps(tour: TourStop[]): StepInput[] {
-  return tour.map((stop) => ({ title: stop.file.split("/").at(-1) ?? stop.file, oneLiner: stop.whyItMatters, summary: "", role: "core", paths: [stop.file] }));
+  return tour.map((stop) => ({ title: stop.file.split("/").at(-1) ?? stop.file, whyHere: "", oneLiner: stop.whyItMatters, summary: "", role: "core", paths: [stop.file] }));
 }
 
 function filesNoStepCovers(steps: StepInput[], files: DiffFile[]): string[] {
@@ -165,7 +168,7 @@ function filesNoStepCovers(steps: StepInput[], files: DiffFile[]): string[] {
 function withLeftovers(steps: StepInput[], files: DiffFile[]): StepInput[] {
   const leftovers = filesNoStepCovers(steps, files);
   if (leftovers.length === 0) return steps;
-  return [...steps, { title: "Everything else", oneLiner: "Files no step covers.", summary: "", role: "supporting", paths: leftovers }];
+  return [...steps, { title: "Everything else", whyHere: "", oneLiner: "Files no step covers.", summary: "", role: "supporting", paths: leftovers }];
 }
 
 /** Flow steps whose code is in these files. */
@@ -184,7 +187,7 @@ export function buildSteps(data: WalkthroughData, guide: Guide | null): EssaySte
     const files = input.paths.map((path) => essayFile({ path, diff: diffByPath.get(path), stop: stopByPath.get(path) }, index + 1, counters));
     const questions = questionsIn(files);
     return {
-      index, title: input.title, oneLiner: input.oneLiner, summary: input.summary, role: input.role, files,
+      index, title: input.title, whyHere: input.whyHere, oneLiner: input.oneLiner, summary: input.summary, role: input.role, files,
       minutes: minutesFor(files), questionCount: questions.length,
       problemCount: questions.filter((question) => question.severity === "problem").length,
       flowIndexes: flowIndexesIn(input.paths, data.walkthrough.flow),
@@ -330,6 +333,7 @@ function flowStepName(flow: FlowStep[], flowIndex: number): string {
 
 /** What this step is for, and its flow steps. */
 export function whereItFits(step: EssayStep, flow: FlowStep[]): string {
+  if (step.whyHere) return step.whyHere;
   const rolePlace = ROLE_PLACE[step.role];
   if (step.flowIndexes.length === 0) return rolePlace;
   const numbers = joinWithAnd(step.flowIndexes.map((flowIndex) => String(flowIndex + 1)));

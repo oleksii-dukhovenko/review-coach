@@ -17,7 +17,7 @@ const HANDLER = {
 };
 
 function step(overrides: Partial<FlowStep>): FlowStep {
-  return { actor: "", label: "x", layer: "logic", file: "handler.go", line: 10, explanation: "", sends: "", ...overrides };
+  return { actor: "", label: "x", layer: "logic", file: "handler.go", line: 10, explanation: "", sends: "", inPlainWords: "", ...overrides };
 }
 
 describe("lanesOf", () => {
