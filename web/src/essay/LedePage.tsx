@@ -1,4 +1,4 @@
-import { useMemo, type MouseEvent, type ReactNode } from "react";
+import { useMemo, useState, type MouseEvent, type ReactNode } from "react";
 
 import type { Anatomy, Scene, ScenePart, TrainView } from "../../../server/sceneSchema.ts";
 import { drawableScene, drawableTrainScene } from "../anatomy/frame.ts";
@@ -13,7 +13,7 @@ import { focusQuietly, useKeys, type KeyHandler } from "../keys.ts";
 import { PrHeader, PrTabs, type PrTab } from "../pages/PrHeader.tsx";
 import { BeforeAfter, ChangesBanner, FlowSection, GlossaryTerm, RemovedCodeSection } from "../pages/WalkthroughSections.tsx";
 import { useCodeZoom, ZoomablePicture } from "./PictureZoom.tsx";
-import { attentionItems, type AttentionItem, type AttentionRisk, type EssayStep } from "./model.ts";
+import { attentionItems, startHereOf, type AttentionItem, type AttentionRisk, type EssayStep, type FlowStep } from "./model.ts";
 import type { EssayView, ReviewSession } from "./session.ts";
 import { isStepDone } from "./StepPage.tsx";
 
@@ -32,9 +32,63 @@ type LedeProps = {
   onReload: () => void;
 };
 
-function standfirstOf(data: WalkthroughData): string {
-  const story = data.walkthrough.story;
-  return story.tldr || story.whatItDoes.split(/(?<=\.)\s/)[0];
+type Story = WalkthroughData["walkthrough"]["story"];
+
+type OpenLine = ReviewSession["openLine"];
+
+function Glossary({ story }: { story: Story }) {
+  if (story.glossary.length === 0) return null;
+  return (
+    <div className="glossary-row">
+      <span className="small muted">Words you'll see:</span>
+      {story.glossary.map((entry) => <GlossaryTerm key={entry.term} entry={entry} />)}
+    </div>
+  );
+}
+
+function StartHereLine({ label, text }: { label: string; text: string }) {
+  if (!text) return null;
+  return <div className="start-here-line"><dt>{label}</dt><dd>{text}</dd></div>;
+}
+
+/** Problem, fix and how you'd notice, before any code. */
+function StartHereCard({ story }: { story: Story }) {
+  const lines = startHereOf(story);
+  return (
+    <section className="lede-card start-here">
+      <h2>Start here</h2>
+      <dl className="start-here-lines">
+        <StartHereLine label="The problem" text={lines.problem} />
+        <StartHereLine label="The fix" text={lines.fix} />
+        <StartHereLine label="How you'd notice" text={lines.howYouNotice} />
+      </dl>
+      <Glossary story={story} />
+    </section>
+  );
+}
+
+function FlowStepItem({ flowStep, onOpenLine }: { flowStep: FlowStep; onOpenLine: OpenLine }) {
+  return (
+    <li>
+      <span className="flow-step-actor">{flowStep.actor}</span>
+      <span className="flow-step-what">{flowStep.label}</span>
+      {flowStep.explanation ? <span className="flow-step-why">{flowStep.explanation}</span> : null}
+      <button className="link-button small" onClick={() => onOpenLine(flowStep.file, flowStep.line, "RIGHT")}>See the code</button>
+    </li>
+  );
+}
+
+/** The run as a short numbered list. */
+function PlainFlow({ flow, onOpenLine }: { flow: FlowStep[]; onOpenLine: OpenLine }) {
+  if (flow.length === 0) return null;
+  return (
+    <section className="lede-card">
+      <h2>How it runs</h2>
+      <ol className="plain-flow">
+        {flow.map((flowStep, flowIndex) => <FlowStepItem key={flowIndex} flowStep={flowStep} onOpenLine={onOpenLine} />)}
+      </ol>
+    </section>
+  );
 }
 
 const RISK_LABEL: Record<AttentionRisk, string> = { problem: "Problem", hard: "Look closely", low: "Low risk" };
@@ -131,15 +185,14 @@ function ReadingPlan({ session, steps, data, goTo }: { session: ReviewSession; s
 
 function Background({ session, data }: { session: ReviewSession; data: WalkthroughData }) {
   const { story } = data.walkthrough;
-  const hasStoryCard = (story.before && story.after) || story.glossary.length > 0 || story.whatItDoes || story.whyNeeded;
+  const hasStoryCard = (story.before && story.after) || story.whatItDoes || story.whyNeeded;
   return (
     <>
       {hasStoryCard ? (
         <section className="lede-card">
           <h2>Before and after</h2>
           <BeforeAfter story={story} />
-          {story.glossary.length ? <div className="glossary-row"><span className="small muted">Words you'll see:</span>{story.glossary.map((entry) => <GlossaryTerm key={entry.term} entry={entry} />)}</div> : null}
-          <details className="more"><summary>The full story</summary><Markdown text={story.whatItDoes} /><Markdown text={story.whyNeeded} /></details>
+          <details className="more"><summary>The full story</summary><Markdown text={story.tldr} /><Markdown text={story.whatItDoes} /><Markdown text={story.whyNeeded} /></details>
         </section>
       ) : null}
       <ZoomablePicture session={session} data={data} />
@@ -264,21 +317,56 @@ function openStepKey(steps: EssayStep[], goTo: (view: EssayView) => void, stepNu
   return { run: () => goTo({ kind: "step", index: stepNumber - 1 }), when: () => stepNumber <= steps.length };
 }
 
+const PICTURE_TRIES = 20;
+const PICTURE_TRY_MS = 100;
+
+/** Focuses the picture once the fold has drawn it. */
+function focusPictureWhenDrawn(triesLeft = PICTURE_TRIES): void {
+  const target = firstPictureTarget();
+  if (target) focusAndShow(target);
+  else if (triesLeft > 0) window.setTimeout(() => focusPictureWhenDrawn(triesLeft - 1), PICTURE_TRY_MS);
+}
+
+type OverviewKeyParts = { steps: EssayStep[]; session: ReviewSession; goTo: (view: EssayView) => void; showMore: () => void };
+
 /** n for the plan's main button, 1 to 9 for a step, b for the big picture. */
-function useOverviewKeys(steps: EssayStep[], session: ReviewSession, goTo: (view: EssayView) => void): void {
+function useOverviewKeys({ steps, session, goTo, showMore }: OverviewKeyParts): void {
   const openStep = (stepNumber: number) => openStepKey(steps, goTo, stepNumber);
   useKeys("overview", {
     mainAction: () => nextAction(steps, session, goTo).go(),
     step1: openStep(1), step2: openStep(2), step3: openStep(3),
     step4: openStep(4), step5: openStep(5), step6: openStep(6),
     step7: openStep(7), step8: openStep(8), step9: openStep(9),
-    focusPicture: () => focusAndShow(firstPictureTarget()),
+    focusPicture: () => {
+      showMore();
+      focusPictureWhenDrawn();
+    },
   });
 }
 
-/** The front page: what this PR does, where to look hardest, and how long it takes. */
+type MoreProps = { isOpen: boolean; onToggle: () => void; children: ReactNode };
+
+/** Everything past the first read, folded until asked for. */
+function MoreAboutThisPr({ isOpen, onToggle, children }: MoreProps) {
+  return (
+    <div className="lede-more">
+      <button className="btn btn-ghost lede-more-toggle" aria-expanded={isOpen} onClick={onToggle}>
+        {isOpen ? "Hide the details" : "More about this PR: pictures, where to look hardest, the full story"}
+      </button>
+      {isOpen ? <div className="lede-more-body">{children}</div> : null}
+    </div>
+  );
+}
+
+function StartReadingButton({ steps, session, goTo }: { steps: EssayStep[]; session: ReviewSession; goTo: (view: EssayView) => void }) {
+  const action = nextAction(steps, session, goTo);
+  return <button className="btn btn-primary lede-start" onClick={action.go}>{action.label} <Icon name="arrowRight" /></button>;
+}
+
+/** Front page: start here, how it runs, the rest folded. */
 export function LedePage({ session, data, steps, goTo, actions, banners, extra, onReload }: LedeProps) {
-  useOverviewKeys(steps, session, goTo);
+  const [isMoreOpen, setMoreOpen] = useState(false);
+  useOverviewKeys({ steps, session, goTo, showMore: () => setMoreOpen(true) });
   return (
     <div className="lede">
       <PrHeader pr={session.page.pr} actions={actions} tabs={<OverviewTabs steps={steps} data={data} goTo={goTo} session={session} />} />
@@ -287,14 +375,15 @@ export function LedePage({ session, data, steps, goTo, actions, banners, extra, 
       <div className="lede-grid">
         <SkipToReadingPlan />
         <div className="lede-main">
-          <AnatomyPictures session={session} data={data} onReload={onReload} />
-          <section className="lede-card">
-            <h2 className="lede-label">In one line</h2>
-            <p className="lede-standfirst">{standfirstOf(data)}</p>
-          </section>
-          <AttentionList items={attentionItems(steps, data.walkthrough.hardIdeas)} goTo={goTo} />
+          <StartHereCard story={data.walkthrough.story} />
+          <PlainFlow flow={data.walkthrough.flow} onOpenLine={session.openLine} />
+          <StartReadingButton steps={steps} session={session} goTo={goTo} />
           {extra}
-          <Background session={session} data={data} />
+          <MoreAboutThisPr isOpen={isMoreOpen} onToggle={() => setMoreOpen(!isMoreOpen)}>
+            <AnatomyPictures session={session} data={data} onReload={onReload} />
+            <AttentionList items={attentionItems(steps, data.walkthrough.hardIdeas)} goTo={goTo} />
+            <Background session={session} data={data} />
+          </MoreAboutThisPr>
         </div>
         <ReadingPlan session={session} steps={steps} data={data} goTo={goTo} />
       </div>

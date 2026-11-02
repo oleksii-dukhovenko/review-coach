@@ -10,7 +10,7 @@ import { useActiveAnchor } from "../activeAnchor.ts";
 import { focusQuietly, moveCursor, useKeys, type HandlersOf } from "../keys.ts";
 import { CodeFigure } from "./CodeFigure.tsx";
 import { focusLineInView } from "./lineCursor.ts";
-import type { EssayFile, EssayStep, Footnote, QuestionData } from "./model.ts";
+import { whereItFits, type EssayFile, type EssayStep, type FlowStep, type Footnote, type QuestionData } from "./model.ts";
 import { focusNextOpenQuestion, isQuestionSettled, QuestionBlock } from "./QuestionBlock.tsx";
 import { focusNote, footnoteRefId, InlineNotes, RewriteInPlainWords, Sidenotes, StepFiles, YourReview } from "./ReviewMargin.tsx";
 import { fileAnchorId, type EssayView, type ReviewSession } from "./session.ts";
@@ -206,7 +206,9 @@ function finishStep(step: EssayStep, steps: EssayStep[], session: ReviewSession,
   goTo(nextView(step, steps));
 }
 
-function Article({ parts, steps, goTo, children }: { parts: ArticleParts; steps: EssayStep[]; goTo: (view: EssayView) => void; children?: ReactNode }) {
+type ArticleProps = { parts: ArticleParts; steps: EssayStep[]; flow: FlowStep[]; goTo: (view: EssayView) => void; children?: ReactNode };
+
+function Article({ parts, steps, flow, goTo, children }: ArticleProps) {
   const { step, session } = parts;
   const dimState = { isDimmed: false };
   const readFiles = readFilesOf(step);
@@ -214,6 +216,7 @@ function Article({ parts, steps, goTo, children }: { parts: ArticleParts; steps:
     <article className="essay-article">
       <div className="small-caps">Step {step.index + 1} of {steps.length}</div>
       <h1 className="essay-title">{step.title}</h1>
+      <p className="essay-where">{whereItFits(step, flow)}</p>
       {step.summary || step.oneLiner ? <div className="essay-p essay-lead"><Markdown text={step.summary || step.oneLiner} /></div> : null}
       {children}
       {readFiles.map((file) => <FileSection key={file.path} file={file} parts={parts} dimState={dimState} />)}
@@ -306,7 +309,7 @@ export function StepPage({ session, data, steps, step, goTo, canPost, children }
   return (
     <div className="essay-step">
       <Rail session={session} steps={steps} place={{ step }} goTo={goTo} currentFile={currentFile} />
-      <Article parts={parts} steps={steps} goTo={goTo}>{children}</Article>
+      <Article parts={parts} steps={steps} flow={data.walkthrough.flow} goTo={goTo}>{children}</Article>
       <aside className="essay-margin">
         <StepFiles session={session} step={step} />
         <RewriteInPlainWords session={session} data={data} />

@@ -34,7 +34,9 @@ function describeRemovedCode(removed: RemovedSymbol[]): string {
 function coachRole(): string {
   return `You are a review coach. The reader is ${readerProfile()}
 Your job is to help the reader review. Do not review for them.
-- Ask "Did you notice X?" questions that lead the reader to each issue. The answer goes in "because".
+- Explain first, then ask. The reader has not seen anything yet, so never ask "Did you notice X?".
+  Each question says what the code does and why it matters, then asks the reader to check one thing they can see.
+  The answer goes in "because".
 - Teach the why, the how, and the flow. Use examples.
 - Plain words. Short sentences. Consequence first: what a person would see go wrong.
 - Every claim needs file:line. Mark proof "proven" only if you read that exact line and it shows the claim.
@@ -63,18 +65,21 @@ export function walkthroughPrompt(input: WalkthroughInput): string {
     `## Deleted functions (checked with git, not AI)\n${describeRemovedCode(input.removed)}`,
     `## Style rules\nRead these files. Turn misses into coaching questions with source "style-guide" or "readability". The repo's own guide wins on conflict.\n${input.ruleFiles.map((file) => `- ${file}`).join("\n")}`,
     `## What to produce
-- story: tldr first, then before/after as a person would see it, then what and why. Domain nouns in the glossary.
+- story: startHere first, for a reader who knows nothing about this repo: the problem, the fix, how a person would notice.
+  No file, function or folder names there. Then tldr, before/after as a person would see it, then what and why.
+  Domain nouns in the glossary.
 - picture: one small diagram of the parts this PR touches. Mark added and changed parts.
   For each box, name the file and line range of the function or block it stands for.
 - hardIdeas: the few ideas that are hardest to grasp here (syntax, pattern, or design). One-line answer, one-line analogy,
   a tiny diagram only when it shows something words cannot, a JS one-liner when one exists.
-- flow: the run as a hand-off story, entry point first, max 8 steps. Each step names its actor (the part of the system
+- flow: the run as a hand-off story, entry point first, 3-6 steps. Plain words a newcomer follows without the code. Each step names its actor (the part of the system
   doing it) and what it hands to the next step. Same actor name every time that part acts. Point file:line at the code that does it.
 - tour: every non-skim file, in the order the code runs. Each stop gets:
   - notes on syntax, patterns, or design choices the reader may not know, anchored to a line. oneLiner first; keep the explanation short;
     the title and oneLiner must make sense to someone who skims them beside the code: say what happens to which named thing, no labels or riddles;
   - coaching questions for real problems and for things worth knowing. Aim for the few that matter most.
-    Write each one for someone who knows nothing about this PR or codebase: say what the code is for first, explain every name.
+    Write each one for someone who knows nothing about this PR or codebase: say what the code does and why it matters,
+    then ask them to check one thing in the code shown. Explain every name.
 - Line numbers: RIGHT side uses new-file lines; LEFT side uses old-file lines of deleted code.
 - The checkout is the PR head. Read surrounding code when the diff is not enough.`,
     untrustedBlock("pr_diff", patchForReview(input.files)),
@@ -223,7 +228,8 @@ export function plainWordsPrompt(notes: ItemToRewrite[], questions: ItemToRewrit
   return [
     "These notes and questions sit beside code in a review tool. The reader knows nothing about this PR, the feature, or this codebase.",
     "Rewrite each note's title and one-liner so it says what happens to which named thing in this code.",
-    "Rewrite each question, its answer (because) and its example so a newcomer understands them: say what the code is for first, explain every name.",
+    "Rewrite each question, its answer (because) and its example so a newcomer understands them: say what the code does and why it matters,",
+    "then ask them to check one thing in the code shown. Never ask \"Did you notice\". Explain every name.",
     "Keep the meaning. Use the code; read the checkout if you need more. Do not add claims the code does not show.",
     "Return every note and every question, with its id exactly as given.",
     ...notes.map((note) => describeItem("Note", note)),

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseUnifiedDiff } from "../server/diff.ts";
 import type { DiffFile, DiffLine } from "../server/types.ts";
 import type { Guide, WalkthroughData } from "../web/src/api.ts";
-import { attentionItems, buildSteps, firstShownLine, foldRows, isLineInRange, rangeLabel, rangeOf } from "../web/src/essay/model.ts";
+import { attentionItems, buildSteps, firstShownLine, foldRows, isLineInRange, rangeLabel, rangeOf, startHereOf, whereItFits } from "../web/src/essay/model.ts";
 
 function fileFrom(patch: string, tag: DiffFile["tag"] = "normal"): DiffFile {
   return { ...parseUnifiedDiff(patch)[0], tag, tagReason: "" };
@@ -40,7 +40,7 @@ const note = { line: 12, endLine: 12, side: "RIGHT" as const, kind: "syntax" as 
 
 const data: WalkthroughData = {
   walkthrough: {
-    story: { tldr: "t", before: "", after: "", whatItDoes: "w", whyNeeded: "n", glossary: [] },
+    story: { startHere: { problem: "", fix: "", howYouNotice: "" }, tldr: "t", before: "", after: "", whatItDoes: "w", whyNeeded: "n", glossary: [] },
     picture: { caption: "", diagram: "", nodes: [] },
     hardIdeas: [{ conceptKey: "k", title: "Rates are floats", oneLiner: "Money as float rounds wrong.", analogy: "", diagram: "", jsExample: "", term: "", file: "order.go", line: 12 }],
     flow: [],
@@ -123,5 +123,35 @@ describe("note ranges", () => {
   it("labels one line or a range", () => {
     expect(rangeLabel(range)).toBe("lines 78–84");
     expect(rangeLabel(rangeOf({ line: 81, endLine: 81, side: "RIGHT" as const }))).toBe("line 81");
+  });
+});
+
+describe("startHereOf", () => {
+  const story = data.walkthrough.story;
+
+  it("uses the saved start-here lines", () => {
+    const startHere = { problem: "Tax is missing.", fix: "Adds tax.", howYouNotice: "Totals go up." };
+    expect(startHereOf({ ...story, startHere })).toEqual(startHere);
+  });
+
+  it("borrows from the story when the walkthrough is older", () => {
+    expect(startHereOf({ ...story, after: "a" })).toEqual({ problem: "n", fix: "t", howYouNotice: "a" });
+  });
+});
+
+describe("whereItFits", () => {
+  const flowStep = { actor: "Checkout", label: "Adds tax.", layer: "logic" as const, file: "order.go", line: 12, explanation: "", sends: "" };
+  const withFlow: WalkthroughData = { ...data, walkthrough: { ...data.walkthrough, flow: [flowStep, { ...flowStep, file: "pay.go" }] } };
+
+  it("names the flow step this step covers", () => {
+    const [taxStep] = buildSteps(withFlow, guide);
+    expect(whereItFits(taxStep, withFlow.walkthrough.flow)).toBe(
+      'This is the heart of the change. In "How it runs" this is step 1 of 2 (Checkout: Adds tax).',
+    );
+  });
+
+  it("falls back to the step's role", () => {
+    const [, depsStep] = buildSteps(withFlow, guide);
+    expect(whereItFits(depsStep, withFlow.walkthrough.flow)).toBe("This is supporting work: types, tests or settings.");
   });
 });

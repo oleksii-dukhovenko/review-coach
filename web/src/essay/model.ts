@@ -2,6 +2,7 @@ import type { DiffFile, DiffLine, Guide, HardIdea, WalkthroughData } from "../ap
 import { commentFlags } from "../components/commentLines.ts";
 
 type TourStop = WalkthroughData["walkthrough"]["tour"][number];
+export type FlowStep = WalkthroughData["walkthrough"]["flow"][number];
 export type NoteData = TourStop["notes"][number];
 export type QuestionData = TourStop["questions"][number];
 type Side = "LEFT" | "RIGHT";
@@ -39,6 +40,8 @@ export type EssayStep = {
   minutes: number;
   questionCount: number;
   problemCount: number;
+  // - Flow steps whose code is in this step.
+  flowIndexes: number[];
 };
 
 const CHANGED_LINES_PER_MINUTE = 40;
@@ -165,6 +168,12 @@ function withLeftovers(steps: StepInput[], files: DiffFile[]): StepInput[] {
   return [...steps, { title: "Everything else", oneLiner: "Files no step covers.", summary: "", role: "supporting", paths: leftovers }];
 }
 
+/** Flow steps whose code is in these files. */
+export function flowIndexesIn(paths: string[], flow: FlowStep[]): number[] {
+  const inStep = new Set(paths);
+  return flow.flatMap((flowStep, flowIndex) => (inStep.has(flowStep.file) ? [flowIndex] : []));
+}
+
 /** The walkthrough as steps of an essay: text, figures, footnoted notes, inline questions. */
 export function buildSteps(data: WalkthroughData, guide: Guide | null): EssayStep[] {
   const diffByPath = new Map(data.files.map((file) => [file.path, file]));
@@ -178,6 +187,7 @@ export function buildSteps(data: WalkthroughData, guide: Guide | null): EssaySte
       index, title: input.title, oneLiner: input.oneLiner, summary: input.summary, role: input.role, files,
       minutes: minutesFor(files), questionCount: questions.length,
       problemCount: questions.filter((question) => question.severity === "problem").length,
+      flowIndexes: flowIndexesIn(input.paths, data.walkthrough.flow),
     };
   });
 }
@@ -283,4 +293,47 @@ function lowRiskItem(steps: EssayStep[]): AttentionItem[] {
 export function attentionItems(steps: EssayStep[], ideas: HardIdea[] | undefined): AttentionItem[] {
   const ranked = [...problemItems(steps), ...ideaItems(ideas ?? [], steps)].slice(0, MAX_ATTENTION - 1);
   return [...ranked, ...lowRiskItem(steps)];
+}
+
+type Story = WalkthroughData["walkthrough"]["story"];
+
+export type StartHereLines = { problem: string; fix: string; howYouNotice: string };
+
+function firstSentence(text: string): string {
+  return text.split(/(?<=\.)\s/)[0] ?? "";
+}
+
+/** Start-here lines; older walkthroughs fall back to the story. */
+export function startHereOf(story: Story): StartHereLines {
+  const saved: Partial<StartHereLines> = story.startHere ?? {};
+  return {
+    problem: saved.problem || story.whyNeeded,
+    fix: saved.fix || story.tldr || firstSentence(story.whatItDoes),
+    howYouNotice: saved.howYouNotice || story.after,
+  };
+}
+
+const ROLE_PLACE: Record<EssayStep["role"], string> = {
+  core: "This is the heart of the change.",
+  "follow-on": "This is what the main change forces elsewhere.",
+  supporting: "This is supporting work: types, tests or settings.",
+};
+
+function joinWithAnd(words: string[]): string {
+  if (words.length <= 1) return words.join("");
+  return `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
+}
+
+function flowStepName(flow: FlowStep[], flowIndex: number): string {
+  return `${flow[flowIndex].actor}: ${flow[flowIndex].label.replace(/\.$/, "")}`;
+}
+
+/** What this step is for, and its flow steps. */
+export function whereItFits(step: EssayStep, flow: FlowStep[]): string {
+  const rolePlace = ROLE_PLACE[step.role];
+  if (step.flowIndexes.length === 0) return rolePlace;
+  const numbers = joinWithAnd(step.flowIndexes.map((flowIndex) => String(flowIndex + 1)));
+  const names = step.flowIndexes.map((flowIndex) => flowStepName(flow, flowIndex)).join(", then ");
+  const stepWord = step.flowIndexes.length === 1 ? "step" : "steps";
+  return `${rolePlace} In "How it runs" this is ${stepWord} ${numbers} of ${flow.length} (${names}).`;
 }

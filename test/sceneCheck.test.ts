@@ -114,7 +114,7 @@ describe("checkedScene", () => {
 
 function walkthrough(tldr: string): Walkthrough {
   return {
-    story: { tldr, before: "", after: "", whatItDoes: "", whyNeeded: "", glossary: [] },
+    story: { startHere: { problem: "", fix: "", howYouNotice: "" }, tldr, before: "", after: "", whatItDoes: "", whyNeeded: "", glossary: [] },
     picture: { caption: "caption", diagram: "flowchart LR", nodes: [] },
     hardIdeas: [], flow: [], tour: [],
   };

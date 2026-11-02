@@ -902,3 +902,24 @@ div.step-code { padding: 10px; }
 .draft-item:hover, .text-link:hover, .rail-link:hover, .rail-file:hover, .rail-pr:hover, .step-ref:hover,
 .line-ref:hover, .fig-fold:hover { background: transparent; }
 .fig-fold:hover { background: var(--color-accent-100); }
+
+/* Overview: start here, plain flow, folded details */
+.start-here-lines { margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.start-here-line { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; align-items: baseline; }
+.start-here-line dt { font-size: 13px; font-weight: 500; color: var(--text-muted); }
+.start-here-line dd { margin: 0; font-size: 16px; line-height: 1.55; text-wrap: pretty; }
+.start-here .glossary-row { margin-top: 14px; }
+.plain-flow { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; }
+.plain-flow li { line-height: 1.5; }
+.flow-step-actor { font-weight: 500; margin-right: 6px; }
+.flow-step-why { display: block; font-size: 13.5px; color: var(--text-muted); }
+.lede-start { align-self: flex-start; min-height: 40px; }
+.lede-more { display: flex; flex-direction: column; gap: 16px; }
+.lede-more-toggle { align-self: flex-start; }
+.lede-more-body { display: flex; flex-direction: column; gap: 16px; }
+.lede-more-body > section { padding: 18px 20px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); min-width: 0; }
+.lede-more-body > section > h2:first-child { margin-top: 0; }
+.essay-where { margin: -8px 0 16px; font-size: 14px; color: var(--text-muted); text-wrap: pretty; }
+@media (max-width: 560px) {
+  .start-here-line { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}

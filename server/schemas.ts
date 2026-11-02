@@ -17,11 +17,11 @@ const MERMAID_RULES = "Mermaid source, 'flowchart LR' or 'flowchart TD'. Max 8 n
 
 const flowStep = z.object({
   actor: z.string().describe("Who does this step: a part of the system, max 3 words, e.g. 'Bridge handler'. Reuse the exact same name for every step that part does. Max 5 different actors."),
-  label: z.string().describe("Max 5 words, e.g. 'Settings page draws checkbox'"),
+  label: z.string().describe("Max 5 plain words on what happens, e.g. 'Settings page draws checkbox'. No file, function or folder names."),
   layer: z.enum(["screen", "logic", "api", "data", "device", "external", "test"]).describe("screen = UI; logic = app code; api = HTTP/GraphQL boundary; data = database or storage; device = hardware or local service; external = third party"),
   file: z.string(),
   line: z.number().int(),
-  explanation: z.string().describe("Max 15 words: what happens here"),
+  explanation: z.string().describe("Max 15 plain words: what happens here and why, readable without the code"),
   sends: z.string().describe("What this step hands to the next step, max 5 words, e.g. 'job ID', '200 header'. Empty if it hands nothing on, and for the last step."),
 });
 
@@ -60,8 +60,10 @@ const teachingNote = z.object({
 });
 
 const questionText = z.string().describe(
-  "Max 45 words, for a reader who has never seen this PR, this feature, or this codebase. "
-  + "First one plain sentence saying what this code is for, in everyday words. Then the question. "
+  "Max 55 words, for a reader who has never seen this PR, this feature, or this codebase. Explain first, then ask. "
+  + "First one plain sentence on what this code does. Then one on why it matters here. "
+  + "Then one thing to check that the reader can answer from the code shown, e.g. 'Check: what happens when the list is empty?'. "
+  + "Never ask 'Did you notice': the reader has not noticed anything yet. "
   + "Explain every code name in a few words the first time, e.g. '`findRow` (a test helper that finds one table row)'. "
   + "Never assume the reader read the PR description. Never states the answer.",
 );
@@ -95,7 +97,14 @@ const tourStop = z.object({
   questions: z.array(coachingQuestion),
 });
 
+const startHere = z.object({
+  problem: z.string().describe("What goes wrong or is missing without this PR, and who feels it. One sentence, max 25 words. Everyday words, no file, function or folder names."),
+  fix: z.string().describe("What this PR changes to solve it. One sentence, max 25 words. Everyday words, no file, function or folder names."),
+  howYouNotice: z.string().describe("What a person would see or measure differently after it lands. One sentence, max 25 words. Say 'Nothing visible' and what stays the same if so."),
+});
+
 const story = z.object({
+  startHere: startHere.describe("The first thing the reader sees, before any code. Assume they know nothing about this repo."),
   tldr: z.string().describe("The whole PR in one plain sentence, max 20 words"),
   before: z.string().describe("What a person saw or what happened before this PR. Max 2 short sentences."),
   after: z.string().describe("What a person sees or what happens after this PR. Max 2 short sentences."),
@@ -130,7 +139,7 @@ export const walkthroughSchema = z.object({
   story,
   picture: picture.describe("The big picture: the parts this PR touches and how they connect"),
   hardIdeas: z.array(hardIdea).describe("The 1-4 ideas in this PR hardest for the reader to grasp, explained simply. Skip ones listed as already known."),
-  flow: z.array(flowStep).describe("Call chain in run order, entry point first. Max 8 steps."),
+  flow: z.array(flowStep).describe("Call chain in run order, entry point first. 3-6 steps."),
   tour: z.array(tourStop).describe("Non-skim files, in the order the code runs"),
 });
 
@@ -147,6 +156,7 @@ export type Walkthrough = z.infer<typeof walkthroughSchema>;
 export type WalkthroughUpdate = z.infer<typeof walkthroughUpdateSchema>;
 export type TourStop = z.infer<typeof tourStop>;
 export type HardIdea = z.infer<typeof hardIdea>;
+export type StartHere = z.infer<typeof startHere>;
 export type Proof = z.infer<typeof proof>;
 export type PictureNode = z.infer<typeof pictureNode>;
 
